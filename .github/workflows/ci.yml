@@ -52,6 +52,7 @@ jobs:
       - name: Static checks
         shell: bash
         run: |
+          git config --global --add safe.directory "$PWD"
           pre-commit run --all-files --show-diff-on-failure
           source /opt/ros/jazzy/setup.bash
           ament_flake8 --config setup.cfg \
