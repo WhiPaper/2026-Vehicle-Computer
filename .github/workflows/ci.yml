@@ -134,6 +134,13 @@ jobs:
       - name: Import pinned source dependencies
         run: vcs import src --skip-existing < dependencies.repos
 
+      - name: Initialize rosdep
+        run: |
+          if [[ ! -f /etc/ros/rosdep/sources.list.d/20-default.list ]]; then
+            sudo rosdep init
+          fi
+          rosdep update --rosdistro "${ROS_DISTRO}"
+
       - name: Verify workspace package set
         run: |
           colcon list --names-only | sort > "${RUNNER_TEMP}/actual-packages"
