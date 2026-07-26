@@ -1,0 +1,79 @@
+name: ROS 2 Jazzy CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-24.04
+    container:
+      image: ros:jazzy-ros-base-noble
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ROS dependencies
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends \
+            python3-colcon-common-extensions \
+            python3-colcon-meson \
+            python3-jinja2 \
+            python3-ply \
+            pre-commit \
+            python3-pytest \
+            python3-rosdep \
+            python3-vcstool \
+            python3-yaml \
+            libdw-dev \
+            libevent-dev \
+            libgnutls28-dev \
+            libunwind-dev \
+            libyaml-dev \
+            meson \
+            ninja-build \
+            ros-jazzy-diagnostic-aggregator \
+            ros-jazzy-ament-flake8 \
+            ros-jazzy-robot-localization \
+            ros-jazzy-robot-state-publisher \
+            ros-jazzy-ros2trace \
+            ros-jazzy-urdf \
+            ros-jazzy-xacro
+          if [ ! -e /etc/ros/rosdep/sources.list.d/20-default.list ]; then
+            rosdep init
+          fi
+          rosdep update --rosdistro jazzy
+          vcs import src < dependencies.repos
+          rosdep install --from-paths src --ignore-src --rosdistro jazzy -y \
+            --skip-keys=libcamera
+
+      - name: Static checks
+        shell: bash
+        run: |
+          pre-commit run --all-files --show-diff-on-failure
+          source /opt/ros/jazzy/setup.bash
+          ament_flake8 --config setup.cfg \
+            src/vc_bringup \
+            src/vc_safety \
+            src/vc_description/test
+
+      - name: Build
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          colcon build --event-handlers console_direct+ --meson-args \
+            -Dpipelines=rpi/pisp -Dipas=rpi/pisp \
+            -Dtest=false -Ddocumentation=disabled -Dpycamera=disabled \
+            -Dgstreamer=disabled -Dv4l2=disabled
+
+      - name: Test
+        shell: bash
+        run: |
+          source /opt/ros/jazzy/setup.bash
+          source install/setup.bash
+          colcon test \
+            --packages-select vc_description vc_safety vc_bringup \
+            --event-handlers console_direct+
+          colcon test-result --verbose

@@ -1,0 +1,17 @@
+/**:
+  ros__parameters:
+    # IMX219 camera 0, using the native 16:9 sensor crop and a bounded 30 Hz rate.
+    camera: 0
+    role: video
+    format: RGB888
+    width: 1280
+    height: 720
+    sensor_mode: "1920:1080"
+    orientation: 0
+    frame_id: camera_optical_frame
+    use_node_time: false
+    FrameDurationLimits: [33333, 33333]
+
+    # camera_ros defaults to ~/.ros/camera_info/$NAME.yaml. After calibration,
+    # an absolute URL can be configured here, for example:
+    # camera_info_url: "file:///etc/vehicle-computer/camera_info.yaml"

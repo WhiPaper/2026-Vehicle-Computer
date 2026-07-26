@@ -1,0 +1,12 @@
+build/
+install/
+log/
+bags/
+traces/
+.cache/
+__pycache__/
+*.pyc
+.pytest_cache/
+.vscode/
+src/micro-ROS-Agent/
+src/micro_ros_msgs/

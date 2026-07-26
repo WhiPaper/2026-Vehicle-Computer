@@ -1,0 +1,13 @@
+repositories:
+  libcamera:
+    type: git
+    url: https://github.com/raspberrypi/libcamera.git
+    version: 06c385619acb10bbfb33f52f3abeb8f8c095f42b
+  micro-ROS-Agent:
+    type: git
+    url: https://github.com/micro-ROS/micro-ROS-Agent.git
+    version: 52abdf5a9897637b2539cb1c239e1ec4fa92e01c
+  micro_ros_msgs:
+    type: git
+    url: https://github.com/micro-ROS/micro_ros_msgs.git
+    version: e65ab21bd0733ebff2af6317d573cc584efa5893

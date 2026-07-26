@@ -1,0 +1,34 @@
+{
+  "name": "Vehicle Computer ROS 2 Jazzy",
+  "build": {
+    "dockerfile": "Dockerfile",
+    "context": ".."
+  },
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
+  "containerUser": "dev",
+  "remoteUser": "dev",
+  "updateRemoteUserUID": true,
+  "runArgs": [
+    "--group-add=dialout",
+    "--group-add=video",
+    "--group-add=render"
+  ],
+  "containerEnv": {
+    "ROS_DISTRO": "jazzy"
+  },
+  "postCreateCommand": "bash -lc 'pre-commit install --install-hooks && source /opt/ros/jazzy/setup.bash && vcs import src --skip-existing < dependencies.repos && rosdep install --from-paths src --ignore-src --rosdistro jazzy -y --skip-keys=libcamera'",
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "EditorConfig.EditorConfig",
+        "llvm-vs-code-extensions.vscode-clangd",
+        "ms-iot.vscode-ros",
+        "ms-vscode.cpptools",
+        "ms-python.python",
+        "ms-vscode.cmake-tools",
+        "xaver.clang-format"
+      ]
+    }
+  }
+}

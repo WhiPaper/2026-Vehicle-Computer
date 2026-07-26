@@ -1,0 +1,29 @@
+/**:
+  ros__parameters:
+    pub_rate: 5.0
+    analyzers:
+      ecu_transport:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Vehicle/ECU/Transport
+        startswith: ["vehicle_ecu/transport"]
+        timeout: 1.0
+      ecu_drive:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Vehicle/ECU/Drive
+        startswith: ["vehicle_ecu/drive"]
+        timeout: 1.0
+      ecu_imu:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Vehicle/ECU/IMU
+        startswith: ["vehicle_ecu/imu"]
+        timeout: 1.0
+      safety:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Vehicle/Computer/SafetyGate
+        startswith: ["vehicle_computer/safety_gate"]
+        timeout: 1.0
+      state_estimation:
+        type: diagnostic_aggregator/GenericAnalyzer
+        path: Vehicle/Computer/StateEstimation
+        contains: ["odometry/filtered"]
+        timeout: 2.0

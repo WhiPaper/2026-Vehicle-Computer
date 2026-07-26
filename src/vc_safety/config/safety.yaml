@@ -1,0 +1,16 @@
+/**:
+  ros__parameters:
+    publish_rate_hz: 20.0
+    status_rate_hz: 5.0
+    data_timeout_ms: 200
+    diagnostics_timeout_ms: 500
+    command_timeout_ms: 250
+    future_tolerance_ms: 100
+    max_linear_speed_mps: 1.0
+    max_angular_speed_rps: 2.0
+    odom_frame: odom
+    base_frame: base_link
+    imu_frame: imu_link
+    enable_topic_statistics: true
+    statistics_topic: vehicle/safety/statistics
+    use_sim_time: false

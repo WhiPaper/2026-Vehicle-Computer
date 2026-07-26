@@ -1,0 +1,22 @@
+# Replace every example dimension with a measured SI value, then set
+# calibrated to true. vehicle.launch.py intentionally refuses this template.
+schema_version: 1
+
+vehicle:
+  calibrated: false
+  base_length: 0.0
+  base_width: 0.0
+  base_height: 0.0
+  wheel_radius: 0.0
+  wheel_width: 0.0
+  wheel_base: 0.0
+  track_width: 0.0
+
+# REP-103 transform from base_link to imu_link, in metres and radians.
+imu:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0
