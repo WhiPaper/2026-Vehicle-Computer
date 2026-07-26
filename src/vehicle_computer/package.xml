@@ -1,0 +1,20 @@
+<?xml version="1.0"?>
+<package format="3">
+  <name>vehicle_computer</name>
+  <version>0.1.0</version>
+  <description>Installation variant for the complete vehicle computer.</description>
+  <maintainer email="me@whipaper.net">Heejong Jo</maintainer>
+  <license>Proprietary</license>
+
+  <buildtool_depend>ament_cmake</buildtool_depend>
+
+  <exec_depend>micro_ros_agent</exec_depend>
+  <exec_depend>vc_bringup</exec_depend>
+  <exec_depend>vc_description</exec_depend>
+  <exec_depend>vc_safety</exec_depend>
+  <exec_depend>vehicle_computer_runtime</exec_depend>
+
+  <export>
+    <build_type>ament_cmake</build_type>
+  </export>
+</package>

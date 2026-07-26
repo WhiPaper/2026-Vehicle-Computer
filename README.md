@@ -11,6 +11,8 @@ micro-ROS serial transport로 연결하고, URDF/TF, wheel odometry와 IMU의 EK
   `camera_ros` 기반 IMX219, rosbag/tracing 및 hardware/fake/replay launch
 - `vc_safety`: `/cmd_vel_request`를 검증해 ECU `/cmd_vel`로 전달하는
   C++ lifecycle supervisory gate/component
+- `vehicle_computer`: 위 ROS 패키지와 플랫폼 runtime을 실행 의존성으로
+  묶는 설치용 variant 패키지
 
 현재 경계와 데이터 흐름은 [architecture](docs/architecture.md), ROS 2
 기능을 확장 적용하는 목표 구조는
@@ -25,7 +27,7 @@ Ubuntu 24.04와 ROS 2 Jazzy를 사용한다. devcontainer를 열거나 호스트
 ```bash
 sudo apt install python3-colcon-meson meson ninja-build \
   python3-jinja2 python3-ply python3-yaml \
-  libdw-dev libevent-dev libgnutls28-dev libunwind-dev libyaml-dev
+  libdw-dev libgnutls28-dev libudev-dev libunwind-dev libyaml-dev
 source /opt/ros/jazzy/setup.bash
 vcs import src --skip-existing < dependencies.repos
 rosdep install --from-paths src --ignore-src --rosdistro jazzy -y \
@@ -79,13 +81,60 @@ ros2 launch vc_bringup replay.launch.py bag_path:=<bag-directory>
 컨테이너 생성 설정에 명시적으로 전달해야 한다. 장치가 없는 환경에서도
 컨테이너가 시작되도록 기본 설정에는 장치 매핑을 넣지 않았다.
 
-## RPi5 service deployment
+## APT deployment
 
-운영 예시는 `deploy/systemd`에 있다. workspace를
-`/opt/vehicle-computer`에 배치하고 환경 파일과 보정 설정을 설치한 뒤
-서비스를 활성화한다.
+`vMAJOR.MINOR.PATCH` 태그가 네 ROS 패키지의 `package.xml` 버전과 일치하면
+GitHub Actions가 Ubuntu 24.04의 AMD64와 ARM64에서 각각 빌드·테스트한다.
+Bloom으로 ROS `.deb`를 만들고 Raspberry Pi libcamera, systemd unit 및
+보존 설정을 `vehicle-computer-runtime`으로 패키징한 뒤 GitHub Release와
+서명된 GitHub Pages APT 저장소에 배포한다.
+
+ROS 2에서는 특별한 metapackage 형식을 쓰지 않는다. `vehicle_computer`는
+코드가 없는 일반 `ament_cmake` 패키지이며 `exec_depend`로 전체 설치 구성을
+표현한다. 따라서 사용자는 아키텍처와 관계없이 이 패키지 하나를 설치한다.
 
 ```bash
+curl -fsSL \
+  https://whipaper.github.io/2026-Vehicle-Computer/vehicle-computer-archive-keyring.gpg |
+  sudo tee /usr/share/keyrings/vehicle-computer.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/vehicle-computer.gpg] https://whipaper.github.io/2026-Vehicle-Computer noble main" |
+  sudo tee /etc/apt/sources.list.d/vehicle-computer.list
+sudo apt update
+sudo apt install ros-jazzy-vehicle-computer
+
+sudoedit /etc/vehicle-computer/vehicle-computer.env
+sudoedit /etc/vehicle-computer/vehicle.yaml
+sudoedit /etc/vehicle-computer/safety.yaml
+sudo systemctl enable --now vehicle-computer.service
+```
+
+차량이 예기치 않게 기동하지 않도록 패키지는 서비스를 자동 활성화하지
+않는다. GitHub Release에는 두 아키텍처의 `.deb`, 아키텍처별 SHA-256
+목록과 빌드 provenance가 남는다. Pages 저장소는 현재 태그의 패키지
+스냅샷이며 이전 버전 파일은 Release에서 보존한다.
+
+저장소 관리자는 최초 배포 전에 GitHub의 **Settings → Pages → Source**를
+**GitHub Actions**로 설정하고, `APT_GPG_PRIVATE_KEY`와
+`APT_GPG_PASSPHRASE` Actions secrets를 등록해야 한다. 공개키는 별도 secret
+없이 배포 시 저장소 루트에 export된다. 릴리스 순서는 다음과 같다.
+
+```bash
+# 모든 자체 package.xml의 version을 먼저 같은 값으로 변경한다.
+git tag -s v0.2.0 -m "v0.2.0"
+git push origin v0.2.0
+```
+
+직접 workspace를 배치하는 운영 예시는 `deploy/systemd`에 있다.
+workspace를 `/opt/vehicle-computer`에 배치하고 환경 파일과 보정 설정을
+설치한 뒤 서비스를 활성화한다.
+
+```bash
+sudo addgroup --system vehicle-computer
+sudo adduser --system --ingroup vehicle-computer \
+  --home /var/lib/vehicle-computer --no-create-home vehicle-computer
+sudo adduser vehicle-computer dialout
+sudo adduser vehicle-computer video
+sudo adduser vehicle-computer render
 sudo install -d /etc/vehicle-computer
 sudo install -m 0644 deploy/systemd/vehicle-computer.env.example \
   /etc/vehicle-computer/vehicle-computer.env

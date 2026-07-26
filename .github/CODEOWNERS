@@ -1,0 +1,11 @@
+# Default owner for all repository changes.
+* @WhiPaper
+
+# Release, packaging, and deployment infrastructure.
+/.github/ @WhiPaper
+/packaging/ @WhiPaper
+/deploy/ @WhiPaper
+/dependencies.repos @WhiPaper
+
+# Installation variant that defines the complete product.
+/src/vehicle_computer/ @WhiPaper

@@ -10,3 +10,4 @@ __pycache__/
 .vscode/
 src/micro-ROS-Agent/
 src/micro_ros_msgs/
+src/libcamera/

@@ -1,0 +1,25 @@
+#!/bin/sh
+set -e
+
+if command -v systemctl >/dev/null 2>&1; then
+  systemctl daemon-reload >/dev/null 2>&1 || true
+fi
+
+if [ "$1" = "configure" ]; then
+  if ! getent group vehicle-computer >/dev/null; then
+    addgroup --system vehicle-computer
+  fi
+  if ! getent passwd vehicle-computer >/dev/null; then
+    adduser --system --ingroup vehicle-computer \
+      --home /var/lib/vehicle-computer --no-create-home vehicle-computer
+  fi
+  for group in dialout video render; do
+    if getent group "$group" >/dev/null; then
+      adduser vehicle-computer "$group" >/dev/null
+    fi
+  done
+
+  echo "vehicle-computer is installed but not enabled."
+  echo "Calibrate /etc/vehicle-computer/*.yaml and set the stable serial path,"
+  echo "then run: systemctl enable --now vehicle-computer.service"
+fi

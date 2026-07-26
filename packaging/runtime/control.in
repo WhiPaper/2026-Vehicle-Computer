@@ -1,0 +1,11 @@
+Package: vehicle-computer-runtime
+Version: @VERSION@
+Section: misc
+Priority: optional
+Architecture: @ARCH@
+Maintainer: Heejong Jo <me@whipaper.net>
+Installed-Size: @INSTALLED_SIZE@
+Depends: adduser, libc6, libdw1t64, libgcc-s1, libgnutls30t64, liblttng-ust1t64, libstdc++6, libudev1, libunwind8, libyaml-0-2
+Description: Platform runtime for the ROS 2 vehicle computer
+ Pinned Raspberry Pi libcamera runtime, systemd unit, and preserved
+ configuration files used by the vehicle computer deployment.

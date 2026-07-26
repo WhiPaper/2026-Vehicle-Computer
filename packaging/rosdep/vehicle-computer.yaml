@@ -1,0 +1,20 @@
+micro_ros_agent:
+  ubuntu:
+    noble:
+      - ros-jazzy-micro-ros-agent
+vc_bringup:
+  ubuntu:
+    noble:
+      - ros-jazzy-vc-bringup
+vc_description:
+  ubuntu:
+    noble:
+      - ros-jazzy-vc-description
+vc_safety:
+  ubuntu:
+    noble:
+      - ros-jazzy-vc-safety
+vehicle_computer_runtime:
+  ubuntu:
+    noble:
+      - vehicle-computer-runtime

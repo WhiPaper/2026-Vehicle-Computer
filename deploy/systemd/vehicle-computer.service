@@ -7,12 +7,12 @@ StartLimitBurst=10
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-SupplementaryGroups=dialout video render
+User=vehicle-computer
+Group=vehicle-computer
 EnvironmentFile=/etc/vehicle-computer/vehicle-computer.env
+Environment=LD_LIBRARY_PATH=/opt/vehicle-computer/libcamera/lib
 WorkingDirectory=/var/lib/vehicle-computer
-ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && source /opt/vehicle-computer/install/setup.bash && exec ros2 launch vc_bringup vehicle.launch.py serial_device:=${VEHICLE_SERIAL_DEVICE} namespace:=${VEHICLE_NAMESPACE} vehicle_config:=${VEHICLE_CONFIG} safety_config:=${VC_SAFETY_CONFIG} camera:=${VEHICLE_CAMERA_ENABLED} camera_config:=${VEHICLE_CAMERA_CONFIG}'
+ExecStart=/bin/bash -lc 'source /opt/ros/jazzy/setup.bash && if [ -f /opt/vehicle-computer/install/setup.bash ]; then source /opt/vehicle-computer/install/setup.bash; fi && exec ros2 launch vc_bringup vehicle.launch.py serial_device:=${VEHICLE_SERIAL_DEVICE} namespace:=${VEHICLE_NAMESPACE} vehicle_config:=${VEHICLE_CONFIG} safety_config:=${VC_SAFETY_CONFIG} camera:=${VEHICLE_CAMERA_ENABLED} camera_config:=${VEHICLE_CAMERA_CONFIG}'
 KillSignal=SIGINT
 TimeoutStopSec=3
 Restart=on-failure

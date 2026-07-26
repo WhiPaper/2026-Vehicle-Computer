@@ -1,0 +1,8 @@
+Origin: WhiPaper
+Label: Vehicle Computer
+Codename: noble
+Suite: noble
+Architectures: amd64 arm64
+Components: main
+Description: ROS 2 Jazzy vehicle computer packages for Ubuntu 24.04
+SignWith: @SIGNING_KEY@

@@ -1,0 +1,388 @@
+name: Release ROS Debian packages
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: Git ref to build as a candidate
+        required: true
+        default: main
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build-packages:
+    name: Build Debian packages / ${{ matrix.arch }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 120
+    permissions:
+      contents: read
+      attestations: write
+      id-token: write
+      artifact-metadata: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.ref }}
+          persist-credentials: false
+
+      - name: Set up ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Install build and packaging tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            debhelper \
+            dh-python \
+            fakeroot \
+            libdw-dev \
+            libgnutls28-dev \
+            libudev-dev \
+            libunwind-dev \
+            libyaml-dev \
+            meson \
+            ninja-build \
+            python3-bloom \
+            python3-colcon-meson \
+            python3-jinja2 \
+            python3-ply \
+            python3-yaml \
+            python3-vcstool
+
+      - name: Validate release version
+        id: version
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+
+          package_paths = [
+              Path("src/vc_bringup/package.xml"),
+              Path("src/vc_description/package.xml"),
+              Path("src/vc_safety/package.xml"),
+              Path("src/vehicle_computer/package.xml"),
+          ]
+          versions = {
+              ET.parse(path).getroot().findtext("version")
+              for path in package_paths
+          }
+          if len(versions) != 1:
+              raise SystemExit(f"ROS package versions differ: {sorted(versions)}")
+          version = versions.pop()
+          if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
+              raise SystemExit(f"invalid ROS package version: {version}")
+          if os.environ["GITHUB_EVENT_NAME"] == "push":
+              expected = f"v{version}"
+              if os.environ["RELEASE_TAG"] != expected:
+                  raise SystemExit(
+                      f"tag {os.environ['RELEASE_TAG']} must match package version {expected}"
+                  )
+          with open(os.environ["GITHUB_OUTPUT"], "a", encoding="utf-8") as output:
+              output.write(f"value={version}\n")
+          PY
+
+      - name: Import pinned source dependencies
+        run: vcs import vendor-src < dependencies.repos
+
+      - name: Register private rosdep keys
+        run: |
+          echo "yaml file://${GITHUB_WORKSPACE}/packaging/rosdep/vehicle-computer.yaml" |
+            sudo tee /etc/ros/rosdep/sources.list.d/10-vehicle-computer.list
+          rosdep update --rosdistro jazzy
+
+      - name: Install ROS package dependencies
+        run: |
+          rosdep install \
+            --from-paths \
+              src/vc_bringup \
+              src/vc_description \
+              src/vc_safety \
+              vendor-src/micro-ROS-Agent/micro_ros_agent \
+            --ignore-src \
+            --rosdistro jazzy \
+            --skip-keys="libcamera micro_ros_agent vc_description vc_safety vehicle_computer_runtime" \
+            -y
+
+      - name: Build and test ROS workspace
+        id: ros-ci
+        uses: ros-tooling/action-ros-ci@v0.4
+        with:
+          package-name: >-
+            libcamera
+            micro_ros_agent
+            micro_ros_msgs
+            vc_bringup
+            vc_description
+            vc_safety
+            vehicle_computer
+          target-ros2-distro: jazzy
+          vcs-repo-file-url: file://${{ github.workspace }}/dependencies.repos
+          rosdep-skip-keys: libcamera vehicle_computer_runtime
+          no-symlink-install: true
+          coverage-result: false
+          colcon-defaults: |
+            {
+              "build": {
+                "event-handlers": ["console_direct+"],
+                "meson-args": [
+                  "-Dpipelines=rpi/pisp",
+                  "-Dipas=rpi/pisp",
+                  "-Dtest=false",
+                  "-Ddocumentation=disabled",
+                  "-Dpycamera=disabled",
+                  "-Dgstreamer=disabled",
+                  "-Dv4l2=disabled"
+                ]
+              },
+              "test": {
+                "event-handlers": ["console_direct+"]
+              }
+            }
+
+      - name: Build vehicle runtime Debian package
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          runtime_root="${RUNNER_TEMP}/vehicle-computer-runtime"
+          package_root="${runtime_root}/package"
+          libcamera_build="${runtime_root}/libcamera-build"
+
+          meson setup "${libcamera_build}" vendor-src/libcamera \
+            --buildtype=release \
+            --prefix=/opt/vehicle-computer/libcamera \
+            --libdir=lib \
+            -Dpipelines=rpi/pisp \
+            -Dipas=rpi/pisp \
+            -Dtest=false \
+            -Ddocumentation=disabled \
+            -Dpycamera=disabled \
+            -Dgstreamer=disabled \
+            -Dv4l2=disabled
+          meson compile -C "${libcamera_build}"
+          DESTDIR="${package_root}" meson install -C "${libcamera_build}"
+
+          install -d \
+            "${package_root}/DEBIAN" \
+            "${package_root}/etc/vehicle-computer" \
+            "${package_root}/usr/lib/systemd/system"
+          install -m 0644 deploy/systemd/vehicle-computer.service \
+            "${package_root}/usr/lib/systemd/system/vehicle-computer.service"
+          install -m 0644 deploy/systemd/vehicle-computer.env.example \
+            "${package_root}/etc/vehicle-computer/vehicle-computer.env"
+          install -m 0644 src/vc_bringup/config/vehicle.yaml \
+            "${package_root}/etc/vehicle-computer/vehicle.yaml"
+          install -m 0644 src/vc_bringup/config/camera.yaml \
+            "${package_root}/etc/vehicle-computer/camera.yaml"
+          install -m 0644 src/vc_safety/config/safety.yaml \
+            "${package_root}/etc/vehicle-computer/safety.yaml"
+
+          installed_size="$(du -sk "${package_root}" | cut -f1)"
+          sed \
+            -e "s/@VERSION@/${PACKAGE_VERSION}-1noble/" \
+            -e "s/@ARCH@/${PACKAGE_ARCH}/" \
+            -e "s/@INSTALLED_SIZE@/${installed_size}/" \
+            packaging/runtime/control.in > "${package_root}/DEBIAN/control"
+          install -m 0644 packaging/runtime/conffiles \
+            "${package_root}/DEBIAN/conffiles"
+          install -m 0755 packaging/runtime/postinst \
+            "${package_root}/DEBIAN/postinst"
+          install -m 0755 packaging/runtime/postrm \
+            "${package_root}/DEBIAN/postrm"
+
+          mkdir -p dist
+          dpkg-deb --root-owner-group --build \
+            "${package_root}" \
+            "dist/vehicle-computer-runtime_${PACKAGE_VERSION}-1noble_${PACKAGE_ARCH}.deb"
+
+      - name: Build ROS Debian packages with Bloom
+        env:
+          PACKAGE_ARCH: ${{ matrix.arch }}
+          PACKAGE_VERSION: ${{ steps.version.outputs.value }}
+        run: |
+          build_root="${RUNNER_TEMP}/bloom"
+          mkdir -p "${build_root}" dist
+
+          for source_dir in \
+            vendor-src/micro-ROS-Agent/micro_ros_agent \
+            src/vc_description \
+            src/vc_safety \
+            src/vc_bringup \
+            src/vehicle_computer
+          do
+            package_name="$(basename "${source_dir}")"
+            package_dir="${build_root}/${package_name}"
+            cp -a "${source_dir}" "${package_dir}"
+            (
+              cd "${package_dir}"
+              bloom-generate rosdebian \
+                --ros-distro jazzy \
+                --os-name ubuntu \
+                --os-version noble
+              DEB_BUILD_OPTIONS=nocheck fakeroot debian/rules binary
+            )
+            find "${build_root}" -maxdepth 1 -name '*.deb' \
+              -exec mv -t dist {} +
+          done
+
+          dpkg-deb --field dist/*.deb Package Version Architecture Depends
+          (
+            cd dist
+            sha256sum ./*.deb > "SHA256SUMS-${PACKAGE_ARCH}"
+          )
+
+      - name: Upload architecture packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: debian-packages-${{ matrix.arch }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Attest package provenance
+        if: ${{ github.event.repository.visibility == 'public' }}
+        uses: actions/attest@v4
+        with:
+          subject-path: dist/*.deb
+
+      - name: Upload colcon logs on failure
+        if: ${{ failure() && steps.ros-ci.outputs.ros-workspace-directory-name != '' }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-colcon-logs-${{ matrix.arch }}-${{ github.run_id }}
+          path: ${{ steps.ros-ci.outputs.ros-workspace-directory-name }}/log/
+          if-no-files-found: ignore
+          retention-days: 7
+
+  publish-release:
+    name: Publish GitHub Release
+    if: ${{ github.event_name == 'push' }}
+    needs: build-packages
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download all Debian packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: debian-packages-*
+          path: dist
+          merge-multiple: true
+
+      - name: Verify package checksums
+        run: |
+          cd dist
+          sha256sum --check SHA256SUMS-*
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "${GITHUB_REF_NAME}" \
+            dist/*.deb \
+            dist/SHA256SUMS-* \
+            --repo "${GITHUB_REPOSITORY}" \
+            --verify-tag \
+            --generate-notes \
+            --title "${GITHUB_REF_NAME}"
+
+  build-apt-repository:
+    name: Build signed APT repository
+    if: ${{ github.event_name == 'push' }}
+    needs:
+      - build-packages
+      - publish-release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Download all Debian packages
+        uses: actions/download-artifact@v8
+        with:
+          pattern: debian-packages-*
+          path: packages
+          merge-multiple: true
+
+      - name: Import APT archive signing key
+        id: import-gpg
+        uses: crazy-max/ghaction-import-gpg@v7
+        with:
+          gpg_private_key: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+          passphrase: ${{ secrets.APT_GPG_PASSPHRASE }}
+
+      - name: Create signed APT repository
+        env:
+          SIGNING_KEY: ${{ steps.import-gpg.outputs.fingerprint }}
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends reprepro
+
+          mkdir -p site/conf
+          sed "s/@SIGNING_KEY@/${SIGNING_KEY}/" \
+            packaging/apt/distributions.in > site/conf/distributions
+          reprepro --basedir site includedeb noble packages/*.deb
+          gpg --batch --export "${SIGNING_KEY}" \
+            > site/vehicle-computer-archive-keyring.gpg
+          install -m 0644 packaging/apt/index.html site/index.html
+          rm -r site/conf
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages artifact
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: site
+
+  deploy-apt-repository:
+    name: Deploy APT repository to GitHub Pages
+    if: ${{ github.event_name == 'push' }}
+    needs: build-apt-repository
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy APT repository
+        id: deployment
+        uses: actions/deploy-pages@v4
