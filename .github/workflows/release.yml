@@ -144,6 +144,7 @@ jobs:
           target-ros2-distro: jazzy
           vcs-repo-file-url: file://${{ github.workspace }}/dependencies.repos
           rosdep-skip-keys: libcamera vehicle_computer_runtime
+          rosdep-check: true
           no-symlink-install: true
           coverage-result: false
           colcon-defaults: |
