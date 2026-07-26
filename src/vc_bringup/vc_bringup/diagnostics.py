@@ -14,6 +14,7 @@ from rclpy.qos import DurabilityPolicy, QoSProfile, ReliabilityPolicy
 
 
 class StateEstimationMonitor(Node):
+
     def __init__(self):
         super().__init__("state_estimation_monitor")
         self.updater = Updater(self, period=1.0)
@@ -34,6 +35,7 @@ class StateEstimationMonitor(Node):
 
 
 class DiagnosticsMux(Node):
+
     def __init__(self):
         super().__init__("vehicle_diagnostics_mux")
         reliable = QoSProfile(

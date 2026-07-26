@@ -16,9 +16,12 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+env:
+  ROS_DISTRO: jazzy
+
 jobs:
-  repository-checks:
-    name: Repository checks
+  format:
+    name: Format
     runs-on: ubuntu-24.04
     timeout-minutes: 10
 
@@ -32,15 +35,65 @@ jobs:
         uses: actions/cache@v5
         with:
           path: ~/.cache/pre-commit
-          key: pre-commit-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          key: pre-commit-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml') }}
+          restore-keys: pre-commit-v1-${{ runner.os }}-${{ runner.arch }}-
 
-      - name: Run repository checks
+      - name: Check formatting and repository files
         uses: pre-commit/action@v3.0.1
 
+  lint:
+    name: Lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Lint GitHub Actions workflows
+        run: |
+          docker run --rm \
+            -v "${GITHUB_WORKSPACE}:/repo" \
+            -w /repo \
+            rhysd/actionlint:1.7.12
+
+      - name: Set up ROS 2
+        uses: ros-tooling/setup-ros@v0.7
+        with:
+          required-ros-distributions: jazzy
+
+      - name: Install linters
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ros-jazzy-ament-flake8 \
+            shellcheck
+
+      - name: Lint Python
+        run: |
+          # shellcheck disable=SC1090
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          ament_flake8 \
+            --config setup.cfg \
+            src/vc_bringup \
+            src/vc_safety \
+            src/vc_description/test
+
+      - name: Lint package scripts
+        run: shellcheck packaging/runtime/postinst packaging/runtime/postrm
+
   build-and-test:
-    name: ROS 2 Jazzy / amd64
+    name: Build and test / ROS 2 Jazzy / amd64
+    needs:
+      - format
+      - lint
     runs-on: ubuntu-24.04
     timeout-minutes: 90
+    env:
+      CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
+      CCACHE_MAXSIZE: 2G
 
     steps:
       - name: Check out repository
@@ -53,10 +106,18 @@ jobs:
         with:
           required-ros-distributions: jazzy
 
-      - name: Install project-specific build tools
+      - name: Restore compiler cache
+        uses: actions/cache@v5
+        with:
+          path: .cache/ccache
+          key: ccache-v1-${{ runner.os }}-${{ runner.arch }}-jazzy-${{ hashFiles('dependencies.repos', 'src/**/CMakeLists.txt', 'src/**/*.c', 'src/**/*.h', 'src/**/*.cpp', 'src/**/*.hpp') }}
+          restore-keys: ccache-v1-${{ runner.os }}-${{ runner.arch }}-jazzy-
+
+      - name: Install workspace tools
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
+            ccache \
             libdw-dev \
             libgnutls28-dev \
             libudev-dev \
@@ -67,60 +128,111 @@ jobs:
             python3-colcon-meson \
             python3-jinja2 \
             python3-ply \
-            python3-yaml \
-            ros-jazzy-ament-flake8
+            python3-vcstool \
+            python3-yaml
 
-      - name: Run Python static checks
+      - name: Import pinned source dependencies
+        run: vcs import src --skip-existing < dependencies.repos
+
+      - name: Verify workspace package set
         run: |
-          source /opt/ros/jazzy/setup.bash
-          ament_flake8 \
-            --config setup.cfg \
-            src/vc_bringup \
-            src/vc_safety \
-            src/vc_description/test
+          colcon list --names-only | sort > "${RUNNER_TEMP}/actual-packages"
+          sort > "${RUNNER_TEMP}/expected-packages" <<'EOF'
+          libcamera
+          micro_ros_agent
+          micro_ros_msgs
+          vc_bringup
+          vc_description
+          vc_safety
+          vehicle_computer
+          EOF
+          diff -u \
+            "${RUNNER_TEMP}/expected-packages" \
+            "${RUNNER_TEMP}/actual-packages"
 
-      - name: Build and test ROS workspace
-        id: ros-ci
-        uses: ros-tooling/action-ros-ci@v0.4
-        with:
-          package-name: >-
-            libcamera
-            micro_ros_agent
-            micro_ros_msgs
-            vc_bringup
-            vc_description
-            vc_safety
-            vehicle_computer
-          target-ros2-distro: jazzy
-          vcs-repo-file-url: file://${{ github.workspace }}/dependencies.repos
-          rosdep-skip-keys: libcamera vehicle_computer_runtime
-          rosdep-check: true
-          no-symlink-install: true
-          coverage-result: false
-          colcon-defaults: |
-            {
-              "build": {
-                "event-handlers": ["console_direct+"],
-                "meson-args": [
-                  "-Dpipelines=rpi/pisp",
-                  "-Dipas=rpi/pisp",
-                  "-Dtest=false",
-                  "-Ddocumentation=disabled",
-                  "-Dpycamera=disabled",
-                  "-Dgstreamer=disabled",
-                  "-Dv4l2=disabled"
-                ]
-              },
-              "test": {
-                "event-handlers": ["console_direct+"]
-              }
-            }
+      - name: Install ROS dependencies
+        run: |
+          # shellcheck disable=SC1090
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          rosdep install \
+            --from-paths src \
+            --ignore-src \
+            --rosdistro "${ROS_DISTRO}" \
+            --skip-keys="libcamera vehicle_computer_runtime" \
+            -y
+
+      - name: Verify ROS dependencies
+        run: |
+          # shellcheck disable=SC1090
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          rosdep check \
+            --from-paths src \
+            --ignore-src \
+            --rosdistro "${ROS_DISTRO}" \
+            --skip-keys="libcamera vehicle_computer_runtime"
+
+      - name: Build workspace
+        run: |
+          # shellcheck disable=SC1090
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          ccache --zero-stats
+          colcon build \
+            --event-handlers console_direct+ \
+            --cmake-args \
+              -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+              -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            --meson-args \
+              -Dpipelines=rpi/pisp \
+              -Dipas=rpi/pisp \
+              -Dtest=false \
+              -Ddocumentation=disabled \
+              -Dpycamera=disabled \
+              -Dgstreamer=disabled \
+              -Dv4l2=disabled
+
+      - name: Report compiler cache
+        if: ${{ always() }}
+        run: |
+          {
+            echo "## Compiler cache"
+            echo
+            echo '```text'
+            ccache --show-stats
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+      - name: Test workspace
+        run: |
+          # shellcheck disable=SC1090
+          source "/opt/ros/${ROS_DISTRO}/setup.bash"
+          # shellcheck disable=SC1091
+          source install/setup.bash
+
+          set +e
+          colcon test --event-handlers console_direct+
+          test_status=$?
+          colcon test-result --verbose |
+            tee "${RUNNER_TEMP}/test-results.txt"
+          result_status=${PIPESTATUS[0]}
+          set -e
+
+          {
+            echo "## ROS test results"
+            echo
+            echo '```text'
+            cat "${RUNNER_TEMP}/test-results.txt"
+            echo '```'
+          } >> "${GITHUB_STEP_SUMMARY}"
+
+          if (( test_status != 0 || result_status != 0 )); then
+            exit 1
+          fi
 
       - name: Upload colcon logs on failure
-        if: ${{ failure() && steps.ros-ci.outputs.ros-workspace-directory-name != '' }}
+        if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
           name: ci-colcon-logs-${{ github.run_id }}
-          path: ${{ steps.ros-ci.outputs.ros-workspace-directory-name }}/log/
+          path: log/
           if-no-files-found: ignore
           retention-days: 7

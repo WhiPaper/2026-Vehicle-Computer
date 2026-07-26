@@ -37,6 +37,7 @@ def kv(key, value):
 
 
 class TestSafetyGate(unittest.TestCase):
+
     @classmethod
     def setUpClass(cls):
         rclpy.init()

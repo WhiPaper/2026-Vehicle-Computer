@@ -14,6 +14,7 @@ def _kv(key, value):
 
 
 class FakeEcu(Node):
+
     def __init__(self):
         super().__init__("vehicle_ecu")
         self.declare_parameter("healthy", True)
