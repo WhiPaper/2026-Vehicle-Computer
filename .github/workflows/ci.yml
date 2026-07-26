@@ -85,12 +85,20 @@ jobs:
         run: shellcheck packaging/runtime/postinst packaging/runtime/postrm
 
   build-and-test:
-    name: Build and test / ROS 2 Jazzy / amd64
+    name: Build and test / ${{ matrix.arch }}
     needs:
       - format
       - lint
-    runs-on: ubuntu-24.04
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 90
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: amd64
+            runner: ubuntu-24.04
+          - arch: arm64
+            runner: ubuntu-24.04-arm
     env:
       CCACHE_DIR: ${{ github.workspace }}/.cache/ccache
       CCACHE_MAXSIZE: 2G
@@ -239,7 +247,7 @@ jobs:
         if: ${{ failure() }}
         uses: actions/upload-artifact@v7
         with:
-          name: ci-colcon-logs-${{ github.run_id }}
+          name: ci-colcon-logs-${{ matrix.arch }}-${{ github.run_id }}
           path: log/
           if-no-files-found: ignore
           retention-days: 7
