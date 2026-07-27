@@ -227,6 +227,17 @@ def test_fake_stack_uses_namespaced_ros_contract_and_fails_closed():
         topic_names = dict(node.get_topic_names_and_types())
         assert f"/{namespace}/vehicle/safety/statistics" in topic_names
         assert f"/{namespace}/vehicle/diagnostics" in topic_names
+        assert spin_until(
+            node,
+            lambda: len(raw_odom) >= 10
+            and len(raw_imu) >= 10
+            and len(raw_diagnostics) >= 3,
+            timeout=5.0,
+        ), (
+            "insufficient rate samples: "
+            f"odom={len(raw_odom)}, imu={len(raw_imu)}, "
+            f"diagnostics={len(raw_diagnostics)}"
+        )
         assert 25.0 <= median_message_rate(raw_odom) <= 35.0
         assert 40.0 <= median_message_rate(raw_imu) <= 60.0
         assert 4.0 <= median_message_rate(raw_diagnostics) <= 6.0
