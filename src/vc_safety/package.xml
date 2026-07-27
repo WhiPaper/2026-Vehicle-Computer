@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <package format="3">
   <name>vc_safety</name>
-  <version>0.2.1</version>
+  <version>0.2.2</version>
   <description>Supervisory motion gate for the vehicle micro-ROS ECU.</description>
   <maintainer email="me@whipaper.net">Heejong Jo</maintainer>
   <license>Proprietary</license>

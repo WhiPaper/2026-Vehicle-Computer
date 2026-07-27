@@ -8,7 +8,7 @@ package_name = "vc_bringup"
 
 setup(
     name=package_name,
-    version="0.2.1",
+    version="0.2.2",
     packages=find_packages(exclude=["test"]),
     data_files=[
         (
