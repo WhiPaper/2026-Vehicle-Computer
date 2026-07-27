@@ -130,7 +130,9 @@ jobs:
           PY
 
       - name: Import pinned source dependencies
-        run: vcs import vendor-src < dependencies.repos
+        run: |
+          mkdir -p vendor-src
+          vcs import vendor-src < dependencies.repos
 
       - name: Register private rosdep keys
         run: |
