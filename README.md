@@ -121,8 +121,8 @@ sudo systemctl enable --now vehicle-computer.service
 ```bash
 # 모든 자체 package.xml과 src/vc_bringup/setup.py의 version을
 # 먼저 같은 값으로 변경한다.
-git tag -s v0.2.0 -m "v0.2.0"
-git push origin v0.2.0
+git tag -s v0.2.1 -m "v0.2.1"
+git push origin v0.2.1
 ```
 
 직접 workspace를 배치하는 운영 예시는 `deploy/systemd`에 있다.
