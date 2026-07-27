@@ -119,7 +119,8 @@ sudo systemctl enable --now vehicle-computer.service
 없이 배포 시 저장소 루트에 export된다. 릴리스 순서는 다음과 같다.
 
 ```bash
-# 모든 자체 package.xml의 version을 먼저 같은 값으로 변경한다.
+# 모든 자체 package.xml과 src/vc_bringup/setup.py의 version을
+# 먼저 같은 값으로 변경한다.
 git tag -s v0.2.0 -m "v0.2.0"
 git push origin v0.2.0
 ```
