@@ -59,23 +59,22 @@ jobs:
             -w /repo \
             rhysd/actionlint:1.7.12
 
-      - name: Set up ROS 2
-        uses: ros-tooling/setup-ros@v0.7
-        with:
-          required-ros-distributions: jazzy
-
       - name: Install linters
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            ros-jazzy-ament-flake8 \
+            flake8 \
+            python3-flake8-builtins \
+            python3-flake8-class-newline \
+            python3-flake8-comprehensions \
+            python3-flake8-docstrings \
+            python3-flake8-import-order \
+            python3-flake8-quotes \
             shellcheck
 
       - name: Lint Python
         run: |
-          # shellcheck disable=SC1090
-          source "/opt/ros/${ROS_DISTRO}/setup.bash"
-          ament_flake8 \
+          flake8 \
             --config setup.cfg \
             src/vc_bringup \
             src/vc_safety \
@@ -224,7 +223,13 @@ jobs:
           source install/setup.bash
 
           set +e
-          colcon test --event-handlers console_direct+
+          colcon test \
+            --packages-select \
+              vc_bringup \
+              vc_description \
+              vc_safety \
+              vehicle_computer \
+            --event-handlers console_direct+
           test_status=$?
           colcon test-result --verbose |
             tee "${RUNNER_TEMP}/test-results.txt"

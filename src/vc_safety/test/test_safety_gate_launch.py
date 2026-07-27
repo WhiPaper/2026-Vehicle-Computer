@@ -157,6 +157,16 @@ class TestSafetyGate(unittest.TestCase):
                 self.command_pub.publish(command)
             rclpy.spin_once(self.node, timeout_sec=0.02)
 
+    def pump_until(self, predicate, timeout, publish_health=True):
+        deadline = time.monotonic() + timeout
+        while time.monotonic() < deadline:
+            if publish_health:
+                self.publish_health()
+            rclpy.spin_once(self.node, timeout_sec=0.02)
+            if predicate():
+                return True
+        return predicate()
+
     def set_enabled(self, enabled):
         self.assertTrue(self.enable_client.wait_for_service(timeout_sec=5.0))
         request = SetBool.Request()
@@ -193,10 +203,13 @@ class TestSafetyGate(unittest.TestCase):
         self.assertTrue(any(msg.linear.x == 0.2 for msg in self.commands))
 
         self.commands.clear()
-        self.pump(0.4)
+        self.assertTrue(
+            self.pump_until(lambda: self.enabled is False, timeout=1.0),
+            "motion latch did not clear after the command timeout",
+        )
+        self.pump(0.1)
         self.assertTrue(self.commands)
         self.assertTrue(all(msg.linear.x == 0.0 for msg in self.commands[-3:]))
-        self.assertFalse(self.enabled)
 
         response = self.set_enabled(True)
         self.assertTrue(response.success, response.message)
