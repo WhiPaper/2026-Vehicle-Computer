@@ -77,6 +77,7 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           python3 - <<'PY'
+          import ast
           import os
           from pathlib import Path
           import re
@@ -97,6 +98,27 @@ jobs:
           version = versions.pop()
           if not re.fullmatch(r"(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)", version):
               raise SystemExit(f"invalid ROS package version: {version}")
+
+          setup_tree = ast.parse(
+              Path("src/vc_bringup/setup.py").read_text(encoding="utf-8")
+          )
+          setup_versions = {
+              keyword.value.value
+              for node in ast.walk(setup_tree)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Name)
+              and node.func.id == "setup"
+              for keyword in node.keywords
+              if keyword.arg == "version"
+              and isinstance(keyword.value, ast.Constant)
+              and isinstance(keyword.value.value, str)
+          }
+          if setup_versions != {version}:
+              raise SystemExit(
+                  "vc_bringup setup.py version differs from ROS package version: "
+                  f"{sorted(setup_versions)} != {version}"
+              )
+
           if os.environ["GITHUB_EVENT_NAME"] == "push":
               expected = f"v{version}"
               if os.environ["RELEASE_TAG"] != expected:
