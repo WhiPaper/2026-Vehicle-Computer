@@ -89,6 +89,11 @@ def generate_launch_description():
                 ),
                 launch_arguments={
                     **common,
+                    "diagnostics_config": (
+                        share + "/config/diagnostics.hardware.yaml"
+                    ),
+                    "monitor_serial": "true",
+                    "serial_device": LaunchConfiguration("serial_device"),
                 }.items(),
             ),
             IncludeLaunchDescription(

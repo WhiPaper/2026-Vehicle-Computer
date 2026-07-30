@@ -3,6 +3,7 @@
 from ament_index_python.packages import get_package_share_directory
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration
 from launch_ros.actions import Node
 
@@ -13,7 +14,27 @@ def generate_launch_description():
     return LaunchDescription(
         [
             DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "diagnostics_config",
+                default_value=share + "/config/diagnostics.yaml",
+            ),
+            DeclareLaunchArgument("monitor_serial", default_value="false"),
+            DeclareLaunchArgument("serial_device", default_value=""),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            Node(
+                package="vc_bringup",
+                executable="serial_connection_monitor",
+                name="serial_connection_monitor",
+                namespace=namespace,
+                parameters=[
+                    {
+                        "serial_device": LaunchConfiguration("serial_device"),
+                        "use_sim_time": LaunchConfiguration("use_sim_time"),
+                    }
+                ],
+                condition=IfCondition(LaunchConfiguration("monitor_serial")),
+                output="screen",
+            ),
             Node(
                 package="vc_bringup",
                 executable="state_estimation_monitor",
@@ -37,7 +58,7 @@ def generate_launch_description():
                 name="diagnostic_aggregator",
                 namespace=namespace,
                 parameters=[
-                    share + "/config/diagnostics.yaml",
+                    LaunchConfiguration("diagnostics_config"),
                     {"use_sim_time": LaunchConfiguration("use_sim_time")},
                 ],
                 remappings=[

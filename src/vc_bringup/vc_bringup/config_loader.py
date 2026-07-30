@@ -1,5 +1,6 @@
 """Load and validate physical vehicle configuration."""
 
+import os
 from math import isfinite
 from pathlib import Path
 from typing import Any
@@ -25,6 +26,7 @@ IMU_TRANSFORM = (
     "yaw",
 )
 SCHEMA_VERSION = 1
+SERIAL_BY_ID_PREFIX = "/dev/serial/by-id/"
 
 
 class VehicleConfigError(ValueError):
@@ -94,11 +96,22 @@ def load_vehicle_config(path: str) -> dict[str, dict[str, float]]:
 
 
 def validate_serial_device(path: str) -> str:
-    """Require a stable Linux serial-by-id path without resolving the symlink."""
-    prefix = "/dev/serial/by-id/"
-    suffix = path[len(prefix):]
-    if not path.startswith(prefix) or not suffix or "/" in suffix:
+    """Require an accessible stable Linux serial-by-id device."""
+    if not path.startswith(SERIAL_BY_ID_PREFIX):
         raise VehicleConfigError(
             "serial_device must be a single /dev/serial/by-id/<device> path"
+        )
+    device_name = path.removeprefix(SERIAL_BY_ID_PREFIX)
+    if not device_name or "/" in device_name:
+        raise VehicleConfigError(
+            "serial_device must be a single /dev/serial/by-id/<device> path"
+        )
+    device = Path(path)
+    if not device.exists():
+        raise VehicleConfigError(f"serial device does not exist: {path}")
+    if not os.access(path, os.R_OK | os.W_OK):
+        raise VehicleConfigError(
+            f"serial device is not readable and writable: {path}; "
+            "add the service user to the device group and start a new login session"
         )
     return path

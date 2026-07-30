@@ -30,6 +30,7 @@ setup(
         "console_scripts": [
             "diagnostics_mux = vc_bringup.diagnostics:diagnostics_mux_main",
             "fake_ecu = vc_bringup.fake_ecu:main",
+            "serial_connection_monitor = vc_bringup.diagnostics:serial_connection_monitor_main",
             "state_estimation_monitor = vc_bringup.diagnostics:state_estimation_monitor_main",
         ],
     },

@@ -103,8 +103,23 @@ def test_unstable_serial_paths_are_rejected(path):
         validate_serial_device(path)
 
 
-def test_serial_by_id_path_is_accepted():
+def test_serial_by_id_path_is_accepted(monkeypatch):
+    monkeypatch.setattr(Path, "exists", lambda _self: True)
+    monkeypatch.setattr("vc_bringup.config_loader.os.access", lambda *_args: True)
     assert (
         validate_serial_device("/dev/serial/by-id/usb-Silicon_Labs_CP2102")
         == "/dev/serial/by-id/usb-Silicon_Labs_CP2102"
     )
+
+
+def test_missing_serial_device_is_rejected(monkeypatch):
+    monkeypatch.setattr(Path, "exists", lambda _self: False)
+    with pytest.raises(VehicleConfigError, match="does not exist"):
+        validate_serial_device("/dev/serial/by-id/usb-Silicon_Labs_CP2102")
+
+
+def test_inaccessible_serial_device_is_rejected(monkeypatch):
+    monkeypatch.setattr(Path, "exists", lambda _self: True)
+    monkeypatch.setattr("vc_bringup.config_loader.os.access", lambda *_args: False)
+    with pytest.raises(VehicleConfigError, match="not readable and writable"):
+        validate_serial_device("/dev/serial/by-id/usb-Silicon_Labs_CP2102")

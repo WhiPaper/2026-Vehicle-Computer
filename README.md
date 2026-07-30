@@ -58,10 +58,27 @@ ros2 launch vc_bringup vehicle.launch.py \
   serial_device:=/dev/serial/by-id/<CP2102-device>
 ```
 
+Agent 실행 사용자는 symlink 대상 장치에 읽기·쓰기 권한이 있어야 한다.
+Ubuntu에서는 보통 `dialout`, Arch Linux에서는 보통 `uucp` 그룹이 장치를
+소유한다. `ls -l "$(readlink -f /dev/serial/by-id/<CP2102-device>)"`로
+그룹을 확인하고 사용자를 추가한 뒤 새 로그인 세션을 시작한다.
+
+```bash
+sudo usermod -aG "$(stat -c %G \
+  "$(readlink -f /dev/serial/by-id/<CP2102-device>)")" "$USER"
+```
+
 Agent는 2초 간격으로 최대 300회 재시작한다. 한도에 도달하면 전체 launch를
 종료하며, systemd 배포에서는 서비스를 새 세션으로 재시작한다. 모든 재기동
 경로에서 안전 게이트는 disabled 상태로 시작한다. 개발 및 CI에서는 실제 ECU
 없이 전체 그래프를 실행할 수 있다.
+
+하드웨어 bringup은 stable `by-id` 경로의 존재·접근 권한과 ECU
+`/diagnostics` heartbeat를 별도로 감시한다. 장치를 뽑으면
+`Vehicle/Computer/SerialDevice`, Agent 또는 ECU 세션이 끊기면
+`Vehicle/Computer/ECUConnection`이 ERROR가 되며, 재연결 후 heartbeat가
+복구되면 자동으로 OK로 돌아온다. 이는 연결 상태의 자동 복구를 관찰하기 위한
+진단이며, 안전 게이트의 motion enable은 운용자가 다시 명시적으로 요청해야 한다.
 
 ```bash
 ros2 launch vc_bringup fake_ecu.launch.py

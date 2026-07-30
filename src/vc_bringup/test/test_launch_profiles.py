@@ -137,8 +137,14 @@ def test_diagnostics_have_a_single_vehicle_root_and_sim_time_support():
     )
     assert "path: Vehicle/ECU/Transport" in config
     assert "path: Vehicle/Computer/SafetyGate" in config
+    hardware_config = (
+        share / "config" / "diagnostics.hardware.yaml"
+    ).read_text(encoding="utf-8")
+    assert "path: Vehicle/Computer/SerialDevice" in hardware_config
+    assert "path: Vehicle/Computer/ECUConnection" in hardware_config
     assert 'DeclareLaunchArgument("use_sim_time"' in launch_source
-    assert launch_source.count('"use_sim_time": LaunchConfiguration("use_sim_time")') == 3
+    assert launch_source.count('"use_sim_time": LaunchConfiguration("use_sim_time")') == 4
+    assert 'DeclareLaunchArgument("monitor_serial"' in launch_source
 
 
 def test_agent_restart_exhaustion_requests_clean_launch_shutdown():
