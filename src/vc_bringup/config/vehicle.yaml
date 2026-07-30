@@ -3,14 +3,14 @@
 schema_version: 1
 
 vehicle:
-  calibrated: false
-  base_length: 0.0
-  base_width: 0.0
-  base_height: 0.0
-  wheel_radius: 0.0
-  wheel_width: 0.0
-  wheel_base: 0.0
-  track_width: 0.0
+  calibrated: true
+  base_length: 0.255
+  base_width: 0.155
+  base_height: 0.070
+  wheel_radius: 0.0325
+  wheel_width: 0.026
+  wheel_base: 0.135
+  track_width: 0.150
 
 # REP-103 transform from base_link to imu_link, in metres and radians.
 imu:

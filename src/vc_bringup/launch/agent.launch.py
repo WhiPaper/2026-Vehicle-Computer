@@ -4,8 +4,7 @@ from launch import LaunchDescription
 from launch.actions import (
     DeclareLaunchArgument,
     EmitEvent,
-    LogError,
-    LogWarning,
+    LogInfo,
     OpaqueFunction,
     RegisterEventHandler,
     TimerAction,
@@ -41,9 +40,9 @@ def _agent_actions(
     def on_exit(_event, _context):
         if attempt >= limit:
             return [
-                LogError(
+                LogInfo(
                     msg=(
-                        "micro-ROS Agent restart limit reached; "
+                        "[ERROR] micro-ROS Agent restart limit reached; "
                         "stopping bringup so the service supervisor can restart it"
                     )
                 ),
@@ -52,8 +51,8 @@ def _agent_actions(
                 ),
             ]
         return [
-            LogWarning(
-                msg=f"micro-ROS Agent exited; restart {attempt + 1}/{limit}"
+            LogInfo(
+                msg=f"[WARNING] micro-ROS Agent exited; restart {attempt + 1}/{limit}"
             ),
             TimerAction(
                 period=delay,

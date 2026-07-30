@@ -31,7 +31,7 @@ sudo apt install python3-colcon-meson meson ninja-build \
 source /opt/ros/jazzy/setup.bash
 vcs import src --skip-existing < dependencies.repos
 rosdep install --from-paths src --ignore-src --rosdistro jazzy -y \
-  --skip-keys=libcamera
+  --skip-keys="libcamera vehicle_computer_runtime"
 colcon build --symlink-install --meson-args \
   -Dpipelines=rpi/pisp -Dipas=rpi/pisp \
   -Dtest=false -Ddocumentation=disabled -Dpycamera=disabled \

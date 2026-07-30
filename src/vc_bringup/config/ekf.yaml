@@ -1,6 +1,7 @@
 /**:
   ros__parameters:
-    frequency: 30.0
+    # Keep EKF comfortably below measured worst-case compute time on RPi5.
+    frequency: 15.0
     sensor_timeout: 0.2
     two_d_mode: true
     publish_tf: true

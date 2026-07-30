@@ -6,24 +6,26 @@
   },
   "workspaceFolder": "/workspace",
   "workspaceMount": "source=${localWorkspaceFolder},target=/workspace,type=bind",
-  "containerUser": "dev",
-  "remoteUser": "dev",
-  "updateRemoteUserUID": true,
   "runArgs": [
     "--group-add=dialout",
     "--group-add=video",
-    "--group-add=render"
+    "--group-add=render",
+    "--privileged"
+  ],
+  "mounts": [
+    "source=/dev/serial/by-id,target=/dev/serial/by-id,type=bind"
   ],
   "containerEnv": {
     "ROS_DISTRO": "jazzy"
   },
-  "postCreateCommand": "bash -lc 'pre-commit install --install-hooks && source /opt/ros/jazzy/setup.bash && vcs import src --skip-existing < dependencies.repos && rosdep install --from-paths src --ignore-src --rosdistro jazzy -y --skip-keys=libcamera'",
+  "postCreateCommand": "bash -lc 'bashrc_path=\"${HOME}/.bashrc\"; touch \"$bashrc_path\"; grep -qxF \"source /opt/ros/jazzy/setup.bash\" \"$bashrc_path\" || printf \"%s\\n\" \"source /opt/ros/jazzy/setup.bash\" >> \"$bashrc_path\"; grep -qxF \"[ -f /workspace/install/setup.bash ] && source /workspace/install/setup.bash\" \"$bashrc_path\" || printf \"%s\\n\" \"[ -f /workspace/install/setup.bash ] && source /workspace/install/setup.bash\" >> \"$bashrc_path\"; pre-commit install --install-hooks && source /opt/ros/jazzy/setup.bash && vcs import src --skip-existing < dependencies.repos && rosdep install --from-paths src --ignore-src --rosdistro jazzy -y --skip-keys=\"libcamera vehicle_computer_runtime\"'",
   "customizations": {
     "vscode": {
       "extensions": [
         "EditorConfig.EditorConfig",
         "llvm-vs-code-extensions.vscode-clangd",
-        "ms-iot.vscode-ros",
+        "Ranch-Hand-Robotics.rde-ros-2",
+        "Ranch-Hand-Robotics.urdf-editor",
         "ms-vscode.cpptools",
         "ms-python.python",
         "ms-vscode.cmake-tools",

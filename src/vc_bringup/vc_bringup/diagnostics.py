@@ -17,12 +17,15 @@ class StateEstimationMonitor(Node):
 
     def __init__(self):
         super().__init__("state_estimation_monitor")
+        expected_rate = 15.0
+        min_rate = expected_rate * 0.8
+        max_rate = expected_rate * 1.2
         self.updater = Updater(self, period=1.0)
         self.updater.setHardwareID("rpi5-vehicle-computer")
         self.topic_diagnostic = TopicDiagnostic(
             "odometry/filtered",
             self.updater,
-            FrequencyStatusParam({"min": 25.0, "max": 35.0}, 0.1, 30),
+            FrequencyStatusParam({"min": min_rate, "max": max_rate}, 0.1, 30),
             TimeStampStatusParam(-0.1, 0.2),
         )
         self.subscription = self.create_subscription(
