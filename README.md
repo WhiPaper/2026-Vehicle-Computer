@@ -11,6 +11,7 @@ micro-ROS serial transport로 연결하고, URDF/TF, wheel odometry와 IMU의 EK
   `camera_ros` 기반 IMX219, rosbag/tracing 및 hardware/fake/replay launch
 - `vc_safety`: `/cmd_vel_request`를 검증해 ECU `/cmd_vel`로 전달하는
   C++ lifecycle supervisory gate/component
+- `vc_visualization`: PC 전용 RViz2, rqt_graph, bag replay, Gazebo Sim 도구
 - `vehicle_computer`: 위 ROS 패키지와 플랫폼 runtime을 실행 의존성으로
   묶는 설치용 variant 패키지
 
@@ -37,8 +38,15 @@ colcon build --symlink-install --meson-args \
   -Dtest=false -Ddocumentation=disabled -Dpycamera=disabled \
   -Dgstreamer=disabled -Dv4l2=disabled
 source install/setup.bash
-colcon test --packages-select vc_description vc_safety vc_bringup
+colcon test --packages-select vc_description vc_safety vc_bringup vc_visualization
 colcon test-result --verbose
+```
+
+PC에서 시각화와 시뮬레이션을 사용할 때는 별도 GUI 의존성을 설치한다.
+이 패키지는 실차 `vehicle_computer` runtime metapackage에 포함되지 않는다.
+
+```bash
+sudo apt install ros-jazzy-rviz2 ros-jazzy-rqt-graph ros-jazzy-ros-gz
 ```
 
 `src/vc_bringup/config/vehicle.yaml`의 `schema_version: 1`을 유지하면서
@@ -86,6 +94,49 @@ ros2 lifecycle get /safety_gate
 ros2 topic echo /vehicle/diagnostics
 ```
 
+## Visualization
+
+fake ECU 전체 그래프와 RViz2를 함께 실행한다. serial device와 micro-ROS
+Agent는 시작하지 않는다.
+
+```bash
+ros2 launch vc_visualization fake_visualization.launch.py
+```
+
+실차는 RPi5에서 기존 hardware launch를 실행하고, 같은 전용
+`ROS_DOMAIN_ID`를 사용하는 PC에서 RViz2만 실행한다.
+
+```bash
+export ROS_DOMAIN_ID=42
+ros2 launch vc_visualization rviz.launch.py
+ros2 launch vc_visualization graph.launch.py
+```
+
+RViz2 기본 fixed frame은 `odom`이다. `RobotModel`, TF, filtered odometry와
+camera display를 제공한다. RViz2와 rqt_graph는
+제어 publisher가 아니므로 PC에서 `/cmd_vel_request`를 발행하지 않는다.
+
+MCAP 기록은 기존 bringup 기능을 사용하고, 안전하게 격리된 replay와 RViz2를
+함께 실행한다.
+
+```bash
+ros2 launch vc_visualization replay_visualization.launch.py \
+  bag_path:=<bag-directory>
+```
+
+Gazebo Sim은 `/sim` namespace에서만 실행한다. micro-ROS Agent와 serial
+device를 시작하지 않으며, simulation command는 `/sim/cmd_vel`에만 전달된다.
+
+```bash
+ros2 launch vc_visualization simulation.launch.py
+```
+
+시뮬레이션은 기존 safety gate와 EKF를 재사용한다. 기본 motion disabled 상태에서
+`/sim/vehicle/motion_enable`을 명시적으로 enable한 뒤
+`/sim/cmd_vel_request`를 발행해야 움직인다. Gazebo health, IMU, odometry가
+끊기면 safety gate가 zero command를 발행한다. 상세 토픽과 검증 절차는
+[visualization guide](docs/visualization.md)를 참고한다.
+
 bag replay는 안전 게이트 출력을 `replay/cmd_vel_sink`로 보내고, bag에
 기록된 `/cmd_vel`, EKF/TF 및 안전 상태 출력도 `/replay/recorded/...`로
 강제 remap한다. 따라서 물리 `/cmd_vel` publisher를 만들지 않는다.
@@ -100,7 +151,7 @@ ros2 launch vc_bringup replay.launch.py bag_path:=<bag-directory>
 
 ## APT deployment
 
-`vMAJOR.MINOR.PATCH` 태그가 네 ROS 패키지의 `package.xml` 버전과 일치하면
+`vMAJOR.MINOR.PATCH` 태그가 다섯 ROS 패키지의 `package.xml` 버전과 일치하면
 GitHub Actions가 Ubuntu 24.04의 AMD64와 ARM64에서 각각 빌드·테스트한다.
 Bloom으로 ROS `.deb`를 만들고 Raspberry Pi libcamera, systemd unit 및
 보존 설정을 `vehicle-computer-runtime`으로 패키징한 뒤 GitHub Release와

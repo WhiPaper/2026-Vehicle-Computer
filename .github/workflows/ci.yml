@@ -78,7 +78,8 @@ jobs:
             --config setup.cfg \
             src/vc_bringup \
             src/vc_safety \
-            src/vc_description/test
+            src/vc_description/test \
+            src/vc_visualization
 
       - name: Lint package scripts
         run: shellcheck packaging/runtime/postinst packaging/runtime/postrm
@@ -158,6 +159,7 @@ jobs:
           vc_bringup
           vc_description
           vc_safety
+          vc_visualization
           vehicle_computer
           EOF
           diff -u \
@@ -228,6 +230,7 @@ jobs:
               vc_bringup \
               vc_description \
               vc_safety \
+              vc_visualization \
               vehicle_computer \
             --event-handlers console_direct+
           test_status=$?

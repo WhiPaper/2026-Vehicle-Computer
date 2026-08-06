@@ -19,7 +19,7 @@ colcon build --symlink-install --meson-args \
   -Dtest=false -Ddocumentation=disabled -Dpycamera=disabled \
   -Dgstreamer=disabled -Dv4l2=disabled
 source install/setup.bash
-colcon test --packages-select vc_description vc_safety vc_bringup
+colcon test --packages-select vc_description vc_safety vc_bringup vc_visualization
 colcon test-result --verbose
 ```
 

@@ -13,6 +13,7 @@
   <xacro:arg name="imu_roll" default="0.0"/>
   <xacro:arg name="imu_pitch" default="0.0"/>
   <xacro:arg name="imu_yaw" default="0.0"/>
+  <xacro:arg name="sim" default="false"/>
 
   <xacro:property name="base_length" value="$(arg base_length)"/>
   <xacro:property name="base_width" value="$(arg base_width)"/>
@@ -30,6 +31,17 @@
   </material>
 
   <link name="base_link">
+    <inertial>
+      <origin xyz="0 0 ${base_height / 2.0}" rpy="0 0 0"/>
+      <mass value="2.0"/>
+      <inertia
+        ixx="${(2.0 / 12.0) * (base_width * base_width + base_height * base_height)}"
+        ixy="0.0"
+        ixz="0.0"
+        iyy="${(2.0 / 12.0) * (base_length * base_length + base_height * base_height)}"
+        iyz="0.0"
+        izz="${(2.0 / 12.0) * (base_length * base_length + base_width * base_width)}"/>
+    </inertial>
     <visual>
       <origin xyz="0 0 ${base_height / 2.0}" rpy="0 0 0"/>
       <geometry>
@@ -47,6 +59,17 @@
 
   <xacro:macro name="wheel_link" params="name">
     <link name="${name}">
+      <inertial>
+        <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
+        <mass value="0.1"/>
+        <inertia
+          ixx="${(0.1 / 12.0) * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"
+          ixy="0.0"
+          ixz="0.0"
+          iyy="${0.1 * wheel_radius * wheel_radius / 2.0}"
+          iyz="0.0"
+          izz="${(0.1 / 12.0) * (3.0 * wheel_radius * wheel_radius + wheel_width * wheel_width)}"/>
+      </inertial>
       <visual>
         <origin xyz="0 0 0" rpy="${pi / 2.0} 0 0"/>
         <geometry>
@@ -61,6 +84,12 @@
         </geometry>
       </collision>
     </link>
+    <xacro:if value="$(arg sim)">
+      <gazebo reference="${name}">
+        <mu1>1.0</mu1>
+        <mu2>1.0</mu2>
+      </gazebo>
+    </xacro:if>
   </xacro:macro>
 
   <xacro:wheel_link name="front_left_wheel_link"/>
@@ -97,7 +126,13 @@
     <mimic joint="right_wheel_joint" multiplier="1.0" offset="0.0"/>
   </joint>
 
-  <link name="imu_link"/>
+  <link name="imu_link">
+    <inertial>
+      <mass value="0.01"/>
+      <inertia ixx="0.000001" ixy="0.0" ixz="0.0"
+               iyy="0.000001" iyz="0.0" izz="0.000001"/>
+    </inertial>
+  </link>
   <joint name="imu_joint" type="fixed">
     <parent link="base_link"/>
     <child link="imu_link"/>
@@ -105,4 +140,44 @@
       xyz="$(arg imu_x) $(arg imu_y) $(arg imu_z)"
       rpy="$(arg imu_roll) $(arg imu_pitch) $(arg imu_yaw)"/>
   </joint>
+
+  <xacro:if value="$(arg sim)">
+    <gazebo>
+      <plugin
+        filename="gz-sim-diff-drive-system"
+        name="gz::sim::systems::DiffDrive">
+        <left_joint>left_wheel_joint</left_joint>
+        <left_joint>rear_left_wheel_joint</left_joint>
+        <right_joint>right_wheel_joint</right_joint>
+        <right_joint>rear_right_wheel_joint</right_joint>
+        <wheel_separation>${track_width}</wheel_separation>
+        <wheel_radius>${wheel_radius}</wheel_radius>
+        <topic>/sim/cmd_vel</topic>
+        <odom_topic>/sim/odom</odom_topic>
+        <frame_id>odom</frame_id>
+        <child_frame_id>base_link</child_frame_id>
+        <odom_publish_frequency>30</odom_publish_frequency>
+        <publish_odom>true</publish_odom>
+        <publish_tf>false</publish_tf>
+      </plugin>
+      <plugin
+        filename="gz-sim-joint-state-publisher-system"
+        name="gz::sim::systems::JointStatePublisher">
+        <topic>/sim/joint_states</topic>
+        <joint_name>left_wheel_joint</joint_name>
+        <joint_name>rear_left_wheel_joint</joint_name>
+        <joint_name>right_wheel_joint</joint_name>
+        <joint_name>rear_right_wheel_joint</joint_name>
+      </plugin>
+    </gazebo>
+
+    <gazebo reference="imu_link">
+      <sensor name="imu_sensor" type="imu">
+        <always_on>true</always_on>
+        <update_rate>50</update_rate>
+        <visualize>false</visualize>
+        <topic>/sim/imu/data_raw</topic>
+      </sensor>
+    </gazebo>
+  </xacro:if>
 </robot>

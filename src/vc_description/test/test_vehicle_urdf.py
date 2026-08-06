@@ -51,6 +51,7 @@ def test_xacro_expands_to_expected_tree():
         joints["rear_right_wheel_joint"].find("mimic").attrib["joint"]
         == "right_wheel_joint"
     )
+    assert not root.findall("gazebo")
 
     subprocess.run(
         ["check_urdf", "-"],
@@ -59,3 +60,21 @@ def test_xacro_expands_to_expected_tree():
         capture_output=True,
         text=True,
     )
+
+
+def test_sim_xacro_adds_gazebo_drive_and_sensor_plugins():
+    xacro_path = Path(__file__).resolve().parents[1] / "urdf" / "vehicle.urdf.xacro"
+    result = subprocess.run(
+        ["xacro", xacro_path, "sim:=true"],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+    root = ET.fromstring(result.stdout)
+    plugins = root.findall("gazebo/plugin")
+    plugin_names = {plugin.attrib["name"] for plugin in plugins}
+    assert "gz::sim::systems::DiffDrive" in plugin_names
+    assert "gz::sim::systems::JointStatePublisher" in plugin_names
+    imu = root.find("gazebo[@reference='imu_link']/sensor")
+    assert imu is not None
+    assert imu.attrib["type"] == "imu"

@@ -16,6 +16,7 @@ def _state_nodes(context):
     config = load_vehicle_config(vehicle_config_path)
     namespace = LaunchConfiguration("namespace").perform(context)
     use_sim_time = LaunchConfiguration("use_sim_time")
+    sim = LaunchConfiguration("sim")
 
     description_share = get_package_share_directory("vc_description")
     bringup_share = get_package_share_directory("vc_bringup")
@@ -31,10 +32,16 @@ def _state_nodes(context):
         "imu_roll": imu["roll"],
         "imu_pitch": imu["pitch"],
         "imu_yaw": imu["yaw"],
+        "sim": sim,
     }
     command = ["xacro ", xacro_file]
     for key, value in xacro_arguments.items():
-        command.extend([f" {key}:=", str(value)])
+        command.extend(
+            [
+                f" {key}:=",
+                value if isinstance(value, LaunchConfiguration) else str(value),
+            ]
+        )
     robot_description = ParameterValue(Command(command), value_type=str)
 
     state_container = ComposableNodeContainer(
@@ -85,6 +92,7 @@ def generate_launch_description():
         [
             DeclareLaunchArgument("namespace", default_value=""),
             DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument("sim", default_value="false"),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=bringup_share + "/config/vehicle.yaml",

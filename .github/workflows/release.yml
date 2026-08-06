@@ -87,6 +87,7 @@ jobs:
               Path("src/vc_bringup/package.xml"),
               Path("src/vc_description/package.xml"),
               Path("src/vc_safety/package.xml"),
+              Path("src/vc_visualization/package.xml"),
               Path("src/vehicle_computer/package.xml"),
           ]
           versions = {
@@ -119,6 +120,26 @@ jobs:
                   f"{sorted(setup_versions)} != {version}"
               )
 
+          visualization_setup = ast.parse(
+              Path("src/vc_visualization/setup.py").read_text(encoding="utf-8")
+          )
+          visualization_versions = {
+              keyword.value.value
+              for node in ast.walk(visualization_setup)
+              if isinstance(node, ast.Call)
+              and isinstance(node.func, ast.Name)
+              and node.func.id == "setup"
+              for keyword in node.keywords
+              if keyword.arg == "version"
+              and isinstance(keyword.value, ast.Constant)
+              and isinstance(keyword.value.value, str)
+          }
+          if visualization_versions != {version}:
+              raise SystemExit(
+                  "vc_visualization setup.py version differs from ROS package version: "
+                  f"{sorted(visualization_versions)} != {version}"
+              )
+
           if os.environ["GITHUB_EVENT_NAME"] == "push":
               expected = f"v{version}"
               if os.environ["RELEASE_TAG"] != expected:
@@ -147,6 +168,7 @@ jobs:
               src/vc_bringup \
               src/vc_description \
               src/vc_safety \
+              src/vc_visualization \
               vendor-src/micro-ROS-Agent/micro_ros_agent \
             --ignore-src \
             --rosdistro jazzy \
@@ -164,6 +186,7 @@ jobs:
             vc_bringup
             vc_description
             vc_safety
+            vc_visualization
             vehicle_computer
           target-ros2-distro: jazzy
           vcs-repo-file-url: file://${{ github.workspace }}/dependencies.repos
@@ -259,6 +282,7 @@ jobs:
             src/vc_description \
             src/vc_safety \
             src/vc_bringup \
+            src/vc_visualization \
             src/vehicle_computer
           do
             package_name="$(basename "${source_dir}")"
