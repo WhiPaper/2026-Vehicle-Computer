@@ -31,9 +31,18 @@ def _camera_node(context):
 def generate_launch_description():
     return LaunchDescription(
         [
-            DeclareLaunchArgument("camera_config"),
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "camera_config",
+                description="camera_ros parameter YAML",
+            ),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Camera namespace"
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
             OpaqueFunction(function=_camera_node),
         ]
     )

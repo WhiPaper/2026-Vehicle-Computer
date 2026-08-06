@@ -6,6 +6,7 @@
 namespace vc_safety
 {
 
+/// Health flags extracted from the ECU diagnostics contract.
 struct EcuHealth
 {
     bool transport_ok{false};
@@ -14,6 +15,7 @@ struct EcuHealth
     bool time_synchronized{false};
 };
 
+/// Fail closed when a required ECU status or key is missing or malformed.
 EcuHealth evaluate_ecu_diagnostics(const diagnostic_msgs::msg::DiagnosticArray& diagnostics);
 
 } // namespace vc_safety

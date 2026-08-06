@@ -52,12 +52,28 @@ def generate_launch_description():
     share = get_package_share_directory("vc_visualization")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
-            DeclareLaunchArgument("replay", default_value="false"),
-            DeclareLaunchArgument("simulation", default_value="false"),
             DeclareLaunchArgument(
-                "rviz_config", default_value=share + "/config/vehicle.rviz"
+                "namespace", default_value="", description="RViz namespace"
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
+            DeclareLaunchArgument(
+                "replay",
+                default_value="false",
+                description="Remap RViz inputs to replay/recorded",
+            ),
+            DeclareLaunchArgument(
+                "simulation",
+                default_value="false",
+                description="Remap TF inputs to the simulation namespace",
+            ),
+            DeclareLaunchArgument(
+                "rviz_config",
+                default_value=share + "/config/vehicle.rviz",
+                description="RViz display configuration",
             ),
             OpaqueFunction(function=_rviz_node),
         ]

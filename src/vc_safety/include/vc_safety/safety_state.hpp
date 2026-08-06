@@ -8,22 +8,31 @@
 namespace vc_safety
 {
 
+/// Validated timing and command limits used by the fail-closed state machine.
 struct SafetyConfig
 {
+    /// Maximum age of odometry and IMU samples.
     std::int64_t data_timeout_ns{200000000};
+    /// Maximum age of the ECU diagnostics heartbeat.
     std::int64_t diagnostics_timeout_ns{500000000};
+    /// Maximum age of a command request after enable.
     std::int64_t command_timeout_ns{250000000};
+    /// Maximum future offset accepted for sensor timestamps.
     std::int64_t future_tolerance_ns{100000000};
+    /// Maximum absolute linear.x command in metres per second.
     double max_linear_speed_mps{1.0};
+    /// Maximum absolute angular.z command in radians per second.
     double max_angular_speed_rps{2.0};
 };
 
+/// The last command accepted by the gate.
 struct VelocityCommand
 {
     double linear_x{0.0};
     double angular_z{0.0};
 };
 
+/// Observable state of the safety gate at one decision point.
 struct SafetySnapshot
 {
     bool enabled{false};
@@ -40,27 +49,38 @@ struct SafetySnapshot
     std::int64_t command_age_ms{-1};
 };
 
+/// Result of evaluating the current inputs: a command or a fail-closed zero.
 struct GateDecision
 {
     std::optional<VelocityCommand> command;
     SafetySnapshot snapshot;
 };
 
+/// ROS-independent motion safety state machine.
 class SafetyState
 {
   public:
+    /// Construct a state machine with validated limits.
     explicit SafetyState(SafetyConfig config = SafetyConfig{});
 
+    /// Update the latest ECU health and synchronization state.
     void update_diagnostics(bool transport_ok, bool drive_ok, bool imu_ok, bool time_synchronized,
                             std::int64_t steady_now_ns);
+    /// Validate and store an odometry timestamp.
     bool update_odom(std::int64_t stamp_ns, std::int64_t ros_now_ns, std::int64_t steady_now_ns);
+    /// Validate and store an IMU timestamp.
     bool update_imu(std::int64_t stamp_ns, std::int64_t ros_now_ns, std::int64_t steady_now_ns);
+    /// Store a command request received on the current motion stream.
     bool update_command(double linear_x, double angular_z, std::int64_t steady_now_ns);
 
+    /// Enable only when all readiness and freshness conditions are satisfied.
     bool request_enable(std::int64_t ros_now_ns, std::int64_t steady_now_ns,
                         std::string* reason = nullptr);
+    /// Clear the enable latch and cached command.
     void request_disable(const std::string& reason = "operator_disabled");
+    /// Record an invalid input as the current block/trip reason.
     void reject_input(const std::string& reason);
+    /// Evaluate freshness and return the only command that may be published.
     GateDecision evaluate(std::int64_t ros_now_ns, std::int64_t steady_now_ns);
 
   private:

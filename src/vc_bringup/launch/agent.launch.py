@@ -105,11 +105,25 @@ def generate_launch_description():
                 "serial_device",
                 description="Required /dev/serial/by-id/<device> path",
             ),
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("baudrate", default_value="921600"),
-            DeclareLaunchArgument("agent_verbosity", default_value="4"),
-            DeclareLaunchArgument("agent_respawn_delay", default_value="2.0"),
-            DeclareLaunchArgument("agent_respawn_limit", default_value="300"),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Agent namespace"
+            ),
+            DeclareLaunchArgument(
+                "baudrate", default_value="921600", description="micro-ROS baudrate"
+            ),
+            DeclareLaunchArgument(
+                "agent_verbosity", default_value="4", description="Agent verbosity"
+            ),
+            DeclareLaunchArgument(
+                "agent_respawn_delay",
+                default_value="2.0",
+                description="Agent restart delay in seconds",
+            ),
+            DeclareLaunchArgument(
+                "agent_respawn_limit",
+                default_value="300",
+                description="Maximum Agent restart attempts",
+            ),
             OpaqueFunction(function=_agent),
         ]
     )

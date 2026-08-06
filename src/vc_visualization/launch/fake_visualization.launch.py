@@ -12,10 +12,13 @@ def generate_launch_description():
     visualization_share = get_package_share_directory("vc_visualization")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Visualization namespace"
+            ),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=bringup_share + "/config/vehicle.fake.yaml",
+                description="Deterministic fake vehicle config",
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(

@@ -56,11 +56,16 @@ def generate_launch_description():
     }
     return LaunchDescription(
         [
-            DeclareLaunchArgument("bag_path"),
-            DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "bag_path", description="MCAP bag directory to replay"
+            ),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Replay namespace"
+            ),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=share + "/config/vehicle.fake.yaml",
+                description="Fake vehicle config for replay state estimation",
             ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(

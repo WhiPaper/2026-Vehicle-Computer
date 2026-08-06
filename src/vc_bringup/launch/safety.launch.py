@@ -10,10 +10,24 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
-            DeclareLaunchArgument("auto_start", default_value="true"),
-            DeclareLaunchArgument("cmd_vel_output", default_value="cmd_vel"),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Safety gate namespace"
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
+            DeclareLaunchArgument(
+                "auto_start",
+                default_value="true",
+                description="Configure and activate the lifecycle gate",
+            ),
+            DeclareLaunchArgument(
+                "cmd_vel_output",
+                default_value="cmd_vel",
+                description="Relative gated command output name",
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     PathJoinSubstitution(

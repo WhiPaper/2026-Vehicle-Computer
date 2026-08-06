@@ -12,8 +12,12 @@ def generate_launch_description():
     visualization_share = get_package_share_directory("vc_visualization")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("bag_path"),
-            DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "bag_path", description="MCAP bag directory to replay"
+            ),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Replay namespace"
+            ),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(
                     bringup_share + "/launch/replay.launch.py"

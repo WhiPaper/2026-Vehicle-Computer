@@ -1,317 +1,266 @@
-# ROS 2-native vehicle computer design
+# ROS 2-native 차량 컴퓨터 설계
 
-## Implementation status
+이 문서는 현재 workspace가 ROS 2 기능을 어떤 경계에 적용했는지와, 아직
+도입하지 않은 기능을 분리해서 설명한다. 현재 지원되는 public contract는
+[인터페이스 레퍼런스](interfaces.md), 실제 운영은 [운영 가이드](operations.md)를
+기준으로 한다.
 
-Implemented in the current workspace:
+## 구현 상태
 
-- lifecycle safety component and standalone single-threaded executable;
-- typed/read-only parameter descriptors, relative names, QoS callbacks,
-  topic statistics, ECU and command publisher GID tracking;
-- split hardware/fake/replay launch profiles and bounded Agent restart;
-- composed `robot_state_publisher`, isolated EKF and safety processes;
-- `diagnostic_updater` EKF monitor, diagnostics mux and aggregator;
-- MCAP recording with QoS overrides, snapshot mode and build metadata;
-- non-interactive `ros2_tracing` launch profile;
-- lifecycle, namespace, QoS, ECU restart, EKF/TF and safe-output tests.
+### 현재 구현
 
-SROS 2 deployment policy remains optional deployment work because enclave
-identities and host network boundaries must be selected for the target vehicle.
+- lifecycle safety gate component와 standalone executable
+- typed parameter descriptor, read-only safety parameter, relative topic name
+- QoS event callback, topic statistics, ECU·command publisher GID tracking
+- hardware/fake/replay profile과 bounded Agent restart
+- composed robot_state_publisher, isolated EKF와 safety process
+- diagnostic_updater, diagnostics mux와 aggregator
+- MCAP recording, QoS override, snapshot mode, build metadata
+- 별도 ros2_tracing launch
+- lifecycle, namespace, QoS, ECU restart, EKF/TF, replay isolation test
 
-## 1. Design principles
+### 향후 또는 배포 선택 사항
 
-This design uses ROS 2 features where they improve lifecycle control,
-observability, testability, or integration. The ESP32 wire contract and the
-independent ECU watchdog remain unchanged.
+SROS 2 enclave 정책은 target vehicle의 enclave identity와 host network
+boundary가 정해진 뒤 별도 배포 항목으로 결정한다. 다중 차량의 frame rewrite,
+wheel calibration action, stationary self-test action도 현재 public contract에
+포함하지 않는다.
 
-1. The safety decision is deterministic and remains valid without DDS event
-   delivery, topic statistics, or a lifecycle manager.
-2. Lifecycle state and motion enable state are separate. An `active` safety
-   node is allowed to evaluate requests; it does not mean that motion is
-   enabled.
-3. Production topic names are selected by launch remapping. Application code
-   uses relative names so the stack can run under a namespace in tests and
-   multi-vehicle systems.
-4. Composition is used only where shared process ownership is acceptable.
-   Safety-critical and restart-prone processes are isolated.
-5. ROS time is used for message timestamps and TF. A steady clock is used for
-   watchdogs, publish cadence, and receive timeouts.
+## 1. 설계 원칙
 
-## 2. Target runtime architecture
+1. safety decision은 DDS event 전달, topic statistics, lifecycle manager 없이도
+   steady-clock과 입력 검증으로 결정된다.
+2. lifecycle state와 motion enable은 서로 다른 상태다. active gate도 기본은
+   disabled다.
+3. production topic 이름은 launch remapping으로 선택하고 application code는
+   relative name을 사용한다.
+4. composition은 process ownership을 공유해도 되는 non-safety component에만
+   사용한다. safety와 restart-prone process는 분리한다.
+5. ROS time은 message timestamp와 TF에 사용하고, watchdog·publish cadence·
+   receive timeout은 steady clock을 사용한다.
+6. 관찰용 diagnostics와 statistics는 safety decision을 override하지 않는다.
+7. RPi policy는 ECU의 독립 motor loop와 watchdog에 추가되며, 이를 대체하지 않는다.
 
-```text
-Process: micro_ros_agent (launch respawn)
-  serial XRCE-DDS <----------------------------> vehicle_ecu
+## 2. Runtime architecture
 
-Process: vehicle_state_container
-  robot_state_publisher component
-    joint_states ------------------------------> tf / tf_static
-  future non-safety sensor adapters
+    Process: micro_ros_agent
+      serial XRCE-DDS <------------------------------> vehicle_ecu
 
-Process: ekf_node
-  odom + imu/data_raw --------------------------> odometry/filtered
-                                                  odom -> base_link
+    Process: vehicle_state_container
+      robot_state_publisher component
+        joint_states ---------------------------------> tf / tf_static
 
-Process: vc_safety_gate (LifecycleNode)
-  cmd_vel_request + ECU health ----------------> cmd_vel
-  lifecycle services
-  motion_enable service
-  motion_enabled transient state
-  diagnostics and topic statistics
+    Process: ekf_filter_node
+      odom + imu/data_raw ----------------------------> odometry/filtered
+                                                        odom -> base_link
 
-Process: diagnostics_aggregator
-  diagnostics ---------------------------------> vehicle health tree
+    Process: safety_gate (LifecycleNode)
+      cmd_vel_request + ECU health -------------------> cmd_vel
+      lifecycle services
+      motion_enable service
+      motion_enabled state
+      safety diagnostics/statistics
 
-Optional process: rosbag2 recorder
-  selected topics, tf, diagnostics, statistics -> MCAP flight record
-```
+    Process: diagnostics_aggregator
+      diagnostics ------------------------------------> vehicle health tree
 
-`robot_state_publisher` is available as a Jazzy component. The installed Jazzy
-`robot_localization` package does not export its EKF as a component, so the EKF
-remains a separate process. The safety gate also remains isolated: an error in
-visualization or state publication must not terminate command supervision.
+    Optional: rosbag2 recorder
+      selected topics, tf, diagnostics, statistics --> MCAP
+
+Jazzy의 robot_state_publisher는 component로 실행한다. 설치된
+robot_localization EKF는 component로 export되지 않으므로 별도 process로
+유지한다. 안전 gate도 별도 process로 유지하여 RViz2나 state publication의
+오류가 command supervision을 종료시키지 않게 한다.
 
 ## 3. Managed safety gate
 
-`vc_safety_gate` becomes an `rclcpp_lifecycle::LifecycleNode` while the
-pure `SafetyState` class remains ROS-independent.
-
-| Lifecycle state | Resources | Motion behavior |
+| lifecycle state | 리소스 | motion 동작 |
 |---|---|---|
-| `unconfigured` | parameters only | no non-zero publisher |
-| `inactive` | subscriptions, services, timers allocated | zero command, enable rejected |
-| `active` | lifecycle publishers active | enable may be accepted if ready |
-| `error/finalized` | best-effort final zero before transition | latch and stored command cleared |
+| unconfigured | parameter 중심 | non-zero command 없음 |
+| inactive | subscription/service/timer 준비 | zero command, enable 거부 |
+| active | lifecycle publisher 활성 | readiness가 있으면 enable 검토 |
+| error/finalized | best-effort final zero | latch와 cached command 제거 |
 
-Lifecycle transitions have the following responsibilities:
+전이는 다음 책임을 가진다.
 
-- `on_configure`: validate all parameters atomically, create endpoints, reset
-  the state machine, and publish the initial disabled state.
-- `on_activate`: activate publishers and begin supervision in the disabled
-  state. It never restores a previous enable.
-- `on_deactivate`, `on_cleanup`, `on_shutdown`, `on_error`: publish zero while
-  the publisher is active, clear the enable latch and cached command, then
-  release resources as appropriate.
+- on_configure: parameter를 검증하고 endpoint를 만들며 state를 reset한다.
+- on_activate: publisher를 activate하고 disabled supervision을 시작한다.
+- on_deactivate/on_cleanup/on_shutdown/on_error: zero를 발행하고 enable latch와
+  command를 지운 뒤 리소스를 해제한다.
+- launch는 process 시작 뒤 configure → activate를 요청한다.
+- Agent availability는 lifecycle prerequisite가 아니다. gate가 diagnostics
+  부재를 관찰하고 motion enable을 거부한다.
 
-Launch drives `configure -> activate` after the process starts. Agent
-availability is not a lifecycle prerequisite: the active gate observes the
-missing diagnostics and rejects motion. The standard lifecycle services and
-`/vehicle/motion_enable` serve different purposes and must not be coupled.
+lifecycle active는 vehicle motion permission이 아니다. motion은 별도
+vehicle/motion_enable service의 성공을 요구한다.
 
-## 4. ROS graph and names
+## 4. Names와 namespace
 
-Node code uses relative names:
+Node code는 다음 relative name을 사용한다.
 
-| Node-local name | Default production remap |
+| node-local name | 기본 production 이름 |
 |---|---|
-| `cmd_vel_request` | `/cmd_vel_request` |
-| `cmd_vel` | `/cmd_vel` |
-| `imu/data_raw` | `/imu/data_raw` |
-| `odom` | `/odom` |
-| `joint_states` | `/joint_states` |
-| `diagnostics` | `/diagnostics` |
-| `motion_enable` | `/vehicle/motion_enable` |
-| `motion_enabled` | `/vehicle/motion_enabled` |
-| `safety/diagnostics` | `/vehicle/safety/diagnostics` |
-| `safety/statistics` | `/vehicle/safety/statistics` |
+| cmd_vel_request | /cmd_vel_request |
+| cmd_vel | /cmd_vel |
+| imu/data_raw | /imu/data_raw |
+| odom | /odom |
+| joint_states | /joint_states |
+| diagnostics | /diagnostics |
+| vehicle/motion_enable | /vehicle/motion_enable |
+| vehicle/motion_enabled | /vehicle/motion_enabled |
+| vehicle/safety/diagnostics | /vehicle/safety/diagnostics |
+| vehicle/safety/statistics | /vehicle/safety/statistics |
 
-The default launch preserves the existing public contract. A `namespace`
-launch argument and explicit remappings support fake-ECU tests. TF frames
-retain their ECU-defined unprefixed names. Multi-vehicle deployment requires a
-separate frame-rewriting boundary and is intentionally not exposed as a
-partially working launch option.
+namespace launch argument와 explicit remap으로 fake/replay/simulation을 격리한다.
+TF frame은 현재 ECU 계약의 unprefixed 이름을 유지한다. 다중 차량 frame
+rewrite는 별도 경계가 없으므로 현재 launch에서 노출하지 않는다.
 
-## 5. QoS and DDS graph events
+## 5. QoS와 DDS event
 
-The ECU-compatible QoS remains authoritative:
+현재 authoritative QoS는 다음과 같다.
 
-- sensor inputs: best-effort, volatile, keep-last depth 1;
-- diagnostics and commands: reliable, volatile, keep-last depth 1;
-- current motion-enabled state: reliable, transient-local, keep-last depth 1.
+- sensor input: best-effort, volatile, keep-last depth 1
+- command와 diagnostics: reliable, volatile, keep-last depth 1
+- motion-enabled state: reliable, transient-local, keep-last depth 1
+- tf_static: reliable, transient-local
 
-The safety gate adds subscription and publisher event callbacks for:
+safety gate는 다음 event를 관찰한다.
 
-- incompatible QoS;
-- publisher matched/unmatched;
-- message lost where supported by the RMW implementation;
-- liveliness changes where exposed by the existing ECU QoS.
+- incompatible QoS
+- publisher matched/unmatched
+- RMW가 제공하는 message lost
+- ECU QoS가 노출하는 liveliness 변화
+- odom, IMU, diagnostics publisher GID 변경
 
-These events improve diagnosis but do not replace steady-clock receive
-timeouts. A finite requested DDS deadline or custom liveliness lease is not
-added because the ECU currently offers the default policies; requesting a
-stronger policy could make the endpoints incompatible.
+event는 조기 진단과 latch 해제에 사용하지만 receive timeout을 없애지 않는다.
+ECU가 제공하지 않는 deadline이나 custom liveliness lease를 요청하여 endpoint
+compatibility를 깨지 않는다.
 
-Publisher GIDs from odometry, IMU, and diagnostics message metadata are tracked.
-A changed ECU publisher identity, Agent rediscovery, or disappearance
-immediately clears the motion latch. This closes the case where a restarted ECU
-returns with otherwise valid, monotonic timestamps.
-
-The first valid command publisher after enable owns that motion session. A
-different command publisher GID clears the latch, preventing two controllers
-from racing while continuously refreshing the command watchdog.
+command publisher도 GID를 추적한다. enable 이후 다른 writer가 들어오면 두
+controller가 watchdog을 동시에 갱신하지 못하도록 latch를 해제한다.
 
 ## 6. Parameters
 
-Safety parameters are generated and validated with
-`generate_parameter_library` or equivalent typed descriptors:
+safety gate는 C++ ParameterDescriptor로 type, description, range, read-only
+속성을 선언한다. 현재 range는 positive integer 1–60000, positive double
+0.001–1000이며, 실제 설정 파일의 단위와 의미는
+[인터페이스 레퍼런스](interfaces.md)에 있다.
 
-- positive integer ranges for timeout values;
-- positive floating-point ranges for publish rates;
-- read-only maximum linear and angular command speeds;
-- expected odometry, base, and IMU frames;
-- descriptions and units visible through `ros2 param describe`;
-- safety timeouts and topic bindings marked read-only after configuration.
+다음 값은 active 상태에서 바꾸지 않는다.
 
-Vehicle dimensions remain in one versioned calibrated YAML file. Launch converts
-them into Xacro arguments and rejects an unknown schema, unknown keys, missing,
-non-finite, zero, or negative values.
-Parameters that affect the safety envelope are never changed while the gate is
-active. A required change follows:
+- timeout과 publish/status rate
+- speed limit
+- expected odom/base/IMU frame
+- topic statistics enable/name
 
-```text
-disable motion -> deactivate -> set parameters -> configure -> activate
-```
+필요한 변경 순서:
 
-ROS parameter events are recorded for traceability. Runtime display and
-diagnostic-rate parameters may be dynamic only when they do not affect the
-safety decision.
+    disable motion
+    deactivate lifecycle
+    set validated parameters
+    configure
+    activate
 
-## 7. Executors and callback groups
+vehicle dimensions는 versioned calibrated YAML 하나에서 Xacro argument로
+전달한다. unknown schema/key, missing value, non-finite, zero, negative
+dimension은 launch에서 거부한다.
 
-The safety gate uses a single-threaded executor and one mutually-exclusive
-callback group for sensor, diagnostics, command, service, and timer callbacks.
-This provides a total ordering of state-machine mutations without depending on
-a recursive mutex.
+## 7. Executor와 callback group
 
-If later profiling proves that diagnostic formatting delays the 20 Hz command
-timer, formatting moves to a second callback group with a multi-threaded
-executor. The safety state snapshot is copied under a short lock; the command
-decision remains in the mutually-exclusive group.
+safety gate는 single-threaded executor와 mutually-exclusive callback group으로
+sensor, diagnostics, command, service, timer callback의 state mutation을
+total ordering한다. 이 결정은 recursive mutex에 의존하지 않는다.
 
-The component container uses a multi-threaded executor only for non-safety
-components. Intra-process communication is enabled when both endpoints are in
-that container.
+향후 diagnostic formatting이 20 Hz command timer를 지연시킨다는 측정 결과가
+나오면 formatting만 별도 callback group으로 옮긴다. safety snapshot은 짧은
+lock 아래 복사하고 command decision은 mutually-exclusive group에 남긴다.
 
-## 8. Diagnostics and statistics
+non-safety component container는 multi-threaded executor와 intra-process
+communication을 사용할 수 있다.
 
-The safety gate publishes its fail-closed decision snapshot directly, while the
-state-estimation monitor uses `diagnostic_updater`. `diagnostic_aggregator`
-groups:
+## 8. Diagnostics와 statistics
 
-```text
-/Vehicle
-  /ECU/Transport
-  /ECU/Drive
-  /ECU/IMU
-  /Computer/SafetyGate
-  /Computer/StateEstimation
-```
+safety gate는 fail-closed decision snapshot을 직접 발행한다. state estimation
+monitor는 diagnostic_updater를 사용하고, aggregator는 다음 tree를 만든다.
 
-The existing safety diagnostic keys remain stable. Additional keys include
-the lifecycle state, ECU publisher identity generation, QoS incompatibility
-count, current block reason, last trip reason, and trip count.
+    /Vehicle
+      /ECU/Transport
+      /ECU/Drive
+      /ECU/IMU
+      /Computer/SafetyGate
+      /Computer/StateEstimation
+      /Computer/SerialDevice
+      /Computer/ECUConnection
 
-ROS 2 topic statistics are enabled on `odom`, `imu/data_raw`, and
-`cmd_vel_request`, publishing to `safety/statistics`. They provide message-age
-and period distributions for operations and bag analysis. Safety decisions
-continue to use the existing per-message timestamp and steady-clock checks
-because statistics are windowed and intentionally delayed.
+safety diagnostics에는 lifecycle state, ECU publisher identity generation,
+QoS incompatibility count, current block reason, last trip reason, trip count를
+포함한다.
 
-## 9. Launch structure
+odom, imu/data_raw, cmd_vel_request의 topic statistics는 operations와 bag
+analysis를 위한 windowed metric이다. safety는 message timestamp와 steady
+clock age를 계속 authoritative하게 사용한다.
 
-Launch is divided into reusable files:
+## 9. Launch 구조
 
-```text
-vc_bringup/launch/
-  agent.launch.py
-  state_estimation.launch.py
-  safety.launch.py
-  vehicle.launch.py
-  recording.launch.py
-```
+주요 reusable launch는 다음과 같다.
 
-`vehicle.launch.py` exposes:
+    vc_bringup/launch/
+      agent.launch.py
+      state_estimation.launch.py
+      safety.launch.py
+      vehicle.launch.py
+      recording.launch.py
+      replay.launch.py
 
-- `serial_device` (required stable by-id path);
-- `baudrate`, `agent_verbosity`, `use_sim_time`;
-- `vehicle_config`, `namespace`;
-- `record`, `record_storage_id`;
-- `log_level`.
+vehicle.launch.py의 실제 public argument는 serial_device, baudrate,
+agent_verbosity, agent_respawn_delay, agent_respawn_limit, use_sim_time,
+namespace, record, camera, snapshot_mode, trace, bag_output,
+record_storage_id, trace_session, trace_path, vehicle_config, safety_config,
+camera_config이다. 지원되지 않는 logging-level 인자는 문서나 운영 스크립트에서
+사용하지 않는다.
 
-Launch uses:
+launch는 다음 원칙을 따른다.
 
-- composable-node actions for `robot_state_publisher`;
-- lifecycle transition events for the safety gate;
-- process-exit handlers and bounded Agent respawn followed by launch shutdown;
-- shutdown handlers that request disable before process teardown;
-- explicit remappings rather than hard-coded global names.
+- robot_state_publisher는 composable-node action으로 실행
+- safety lifecycle은 transition event로 configure/activate
+- Agent는 bounded restart 후 launch shutdown
+- shutdown에서 disable/zero 경로를 먼저 요청
+- global hard-coded name 대신 relative name과 explicit remap 사용
 
-Three launch profiles share the same nodes and contracts:
+## 10. Interface 선택
 
-- `hardware`: real Agent and calibrated vehicle file;
-- `fake_ecu`: deterministic publishers and fault injection for CI;
-- `replay`: rosbag2 input with `use_sim_time=true`, with `/cmd_vel` remapped to
-  a non-hardware sink so replay can never move the vehicle.
+- sensor, command, TF, diagnostics, state stream은 topic을 사용한다.
+- motion enable은 짧고 확인 가능한 SetBool service를 사용한다.
+- lifecycle service는 process readiness를 관리하고 vehicle motion을 관리하지
+  않는다.
+- wheel calibration이나 stationary self-test 같은 cancellable 장기 작업이
+  필요해질 때만 action을 검토한다.
+- velocity streaming 자체를 action으로 모델링하지 않는다.
 
-The production deployment runs the hardware profile under systemd. SIGINT is
-used for controlled shutdown, and an exhausted Agent restart budget causes the
-service supervisor to create a fresh disabled session.
+## 11. Recording, tracing, security
 
-## 10. Interface selection
+recording launch는 raw/filtered state, command before/after gate,
+diagnostics, parameter events, statistics, tf, tf_static을 MCAP에 기록한다.
+metadata에는 git revision과 vehicle calibration file hash를 넣는다.
 
-- Topics remain the correct interface for continuous sensor, command, TF,
-  diagnostics, and state streams.
-- `SetBool` remains the short, acknowledged motion-enable service.
-- Lifecycle services manage process readiness, not vehicle motion.
-- Actions are introduced only for cancellable long-running operations such as
-  wheel calibration or a stationary self-test. Velocity streaming is never
-  modeled as an action.
+ros2_tracing은 정상 운영과 분리된 profiling launch에서 callback/executor
+latency를 측정한다. profiling을 위해 safety decision semantics를 바꾸지 않는다.
 
-No ROS interface is added merely to demonstrate a feature.
+운영은 dedicated ROS_DOMAIN_ID와 승인된 network interface를 사용한다.
+SROS 2 enclave는 target network와 identity가 결정된 뒤 추가한다. navigation과
+teleop은 cmd_vel_request만, safety enclave는 cmd_vel을 발행하는 정책을
+고려할 수 있다.
 
-## 11. Recording, tracing, and security
+## 12. 검증과 변경 순서
 
-The recording launch uses rosbag2 with MCAP and records:
+설계 변경은 다음 순서를 따른다.
 
-- raw and filtered state;
-- commands before and after the gate;
-- diagnostics, parameter events, statistics;
-- `/tf` and `/tf_static`.
+1. 인터페이스와 ownership을 문서에서 먼저 갱신한다.
+2. fake/replay/simulation에서 namespace와 isolation을 검증한다.
+3. fail-closed safety test를 통과시킨다.
+4. hardware acceptance에서 실제 device, timing, QoS, recovery를 검증한다.
+5. 기록된 bag와 설정 hash를 release evidence로 보관한다.
 
-The hardware acceptance profile supports a bounded flight-recorder mode and
-records metadata containing the git revision and vehicle calibration file
-hash. `ros2_tracing` is enabled in a separate profiling launch profile to
-measure callback and executor latency without affecting normal deployment.
-Replay remaps recorded command, EKF, TF, and safety output topics below
-`replay/recorded`; only raw inputs and command requests retain their recorded
-names.
-
-Production deployment assigns a dedicated `ROS_DOMAIN_ID`, restricts DDS to
-the intended interface or localhost where applicable, and can add SROS 2
-enclaves. The safety enclave is allowed to publish `/cmd_vel`; navigation and
-teleop enclaves are allowed to publish only `cmd_vel_request`.
-
-## 12. Deliberately excluded
-
-- `ros2_control` is not placed between the RPi and ECU in this phase. The ECU
-  already owns the motor loop, odometry, watchdog, and fixed wire contract;
-  adding a parallel controller would create duplicate ownership.
-- Loaned messages and zero-copy transport are not safety requirements for
-  small Twist/IMU/Odometry messages crossing the XRCE-DDS boundary.
-- DDS deadline and lease policies are not strengthened until the ECU publishes
-  matching offered QoS.
-- Lifecycle activation never implies motion enable.
-
-## 13. Implementation sequence
-
-1. Refactor the safety node to a lifecycle component/standalone executable,
-   add relative names, typed parameter descriptors, and GID/QoS event tracking.
-2. Split launch files and add lifecycle transition handling, namespace/remap
-   support, shutdown disable, and hardware/fake/replay profiles.
-3. Compose `robot_state_publisher`, then add diagnostic updater/aggregator and
-   topic statistics.
-4. Add launch tests for lifecycle transitions, Agent/ECU identity changes,
-   namespace isolation, QoS incompatibility, EKF TF ownership, and safe replay.
-5. Add MCAP recording and tracing profiles, followed by optional SROS 2 policy.
-
-Each step retains the existing ECU contract and must pass the current
-fail-closed safety tests before the next step begins.
+문서 정합성은 python3 scripts/check_docs.py, pre-commit, ROS package test로
+검증한다. 기능 변경 없이 문서·argument description·API comment만 바꾼
+경우에도 이 검사를 실행한다.

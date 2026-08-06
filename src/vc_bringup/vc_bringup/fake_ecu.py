@@ -14,6 +14,7 @@ def _kv(key, value):
 
 
 class FakeEcu(Node):
+    """Publish deterministic sensor and diagnostics contracts for tests."""
 
     def __init__(self):
         super().__init__("vehicle_ecu")

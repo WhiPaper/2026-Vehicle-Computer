@@ -90,12 +90,23 @@ def generate_launch_description():
     bringup_share = get_package_share_directory("vc_bringup")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
-            DeclareLaunchArgument("sim", default_value="false"),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="State estimation namespace"
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
+            DeclareLaunchArgument(
+                "sim",
+                default_value="false",
+                description="Add Gazebo simulation plugins to the Xacro",
+            ),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=bringup_share + "/config/vehicle.yaml",
+                description="Validated vehicle dimensions and IMU pose",
             ),
             OpaqueFunction(function=_state_nodes),
         ]

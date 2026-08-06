@@ -82,6 +82,7 @@ def ecu_heartbeat_state(
 
 
 class StateEstimationMonitor(Node):
+    """Report filtered odometry frequency and timestamp health."""
 
     def __init__(self):
         super().__init__("state_estimation_monitor")
@@ -106,6 +107,7 @@ class StateEstimationMonitor(Node):
 
 
 class DiagnosticsMux(Node):
+    """Forward ECU and safety diagnostics to the aggregator input."""
 
     def __init__(self):
         super().__init__("vehicle_diagnostics_mux")
@@ -130,6 +132,7 @@ class DiagnosticsMux(Node):
 
 
 class SerialConnectionMonitor(Node):
+    """Publish serial-device and ECU-heartbeat diagnostics for hardware."""
 
     def __init__(self):
         super().__init__("serial_connection_monitor")

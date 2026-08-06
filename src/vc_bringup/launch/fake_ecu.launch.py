@@ -16,10 +16,13 @@ def generate_launch_description():
     }
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Fake ECU namespace"
+            ),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=share + "/config/vehicle.fake.yaml",
+                description="Deterministic fake vehicle config",
             ),
             Node(
                 package="vc_bringup",

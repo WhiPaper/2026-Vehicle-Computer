@@ -38,8 +38,14 @@ jobs:
           key: pre-commit-v1-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('.pre-commit-config.yaml') }}
           restore-keys: pre-commit-v1-${{ runner.os }}-${{ runner.arch }}-
 
+      - name: Install documentation checker dependency
+        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends python3-yaml
+
       - name: Check formatting and repository files
         uses: pre-commit/action@v3.0.1
+
+      - name: Check documentation contract
+        run: python3 scripts/check_docs.py
 
   lint:
     name: Lint

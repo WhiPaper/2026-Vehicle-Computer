@@ -10,9 +10,11 @@
 namespace vc_safety
 {
 
+/// Lifecycle wrapper that publishes the fail-closed SafetyState decision.
 class SafetyGateNode : public rclcpp_lifecycle::LifecycleNode
 {
   public:
+    /// Create the component with relative topic and service names.
     explicit SafetyGateNode(const rclcpp::NodeOptions& options = rclcpp::NodeOptions{});
     ~SafetyGateNode() override;
     void emergency_stop(const std::string& reason = "process_shutdown");

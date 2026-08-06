@@ -87,13 +87,37 @@ def _recorder(context):
 def generate_launch_description():
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("bag_output", default_value="bags/vehicle"),
-            DeclareLaunchArgument("record_storage_id", default_value="mcap"),
-            DeclareLaunchArgument("snapshot_mode", default_value="false"),
-            DeclareLaunchArgument("record_camera", default_value="false"),
-            DeclareLaunchArgument("vehicle_config"),
-            DeclareLaunchArgument("qos_overrides"),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Recording namespace"
+            ),
+            DeclareLaunchArgument(
+                "bag_output",
+                default_value="bags/vehicle",
+                description="MCAP output directory",
+            ),
+            DeclareLaunchArgument(
+                "record_storage_id",
+                default_value="mcap",
+                description="rosbag2 storage plugin",
+            ),
+            DeclareLaunchArgument(
+                "snapshot_mode",
+                default_value="false",
+                description="Use bounded snapshot mode",
+            ),
+            DeclareLaunchArgument(
+                "record_camera",
+                default_value="false",
+                description="Record compressed camera topics",
+            ),
+            DeclareLaunchArgument(
+                "vehicle_config",
+                description="Vehicle config used for bag metadata hash",
+            ),
+            DeclareLaunchArgument(
+                "qos_overrides",
+                description="rosbag2 QoS override YAML",
+            ),
             OpaqueFunction(function=_recorder),
         ]
     )

@@ -18,3 +18,13 @@ repos:
     hooks:
       - id: clang-format
         files: \.(c|h|cpp|hpp)$
+
+  - repo: local
+    hooks:
+      - id: documentation-contract
+        name: Check documentation contract
+        entry: python scripts/check_docs.py
+        language: python
+        additional_dependencies:
+          - pyyaml
+        pass_filenames: false

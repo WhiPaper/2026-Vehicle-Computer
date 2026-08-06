@@ -56,15 +56,30 @@ def generate_launch_description():
 
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
-            DeclareLaunchArgument("auto_start", default_value="true"),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
-            DeclareLaunchArgument("cmd_vel_output", default_value="cmd_vel"),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Safety gate namespace"
+            ),
+            DeclareLaunchArgument(
+                "auto_start",
+                default_value="true",
+                description="Configure and activate the lifecycle gate",
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
+            DeclareLaunchArgument(
+                "cmd_vel_output",
+                default_value="cmd_vel",
+                description="Relative gated command output name",
+            ),
             DeclareLaunchArgument(
                 "safety_config",
                 default_value=PathJoinSubstitution(
                     [FindPackageShare("vc_safety"), "config", "safety.yaml"]
                 ),
+                description="Validated safety gate parameter YAML",
             ),
             OpaqueFunction(function=_validate_safety_config),
             safety_gate,

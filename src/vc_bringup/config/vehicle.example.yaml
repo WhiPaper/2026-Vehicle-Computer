@@ -1,0 +1,23 @@
+# 안전한 개발용 예제입니다. 실제 hardware launch는 이 파일을 거부합니다.
+# 차량별 실측값과 IMU 장착 자세를 입력한 뒤 calibrated를 true로 바꾸고
+# 별도의 운영 설정 파일로 저장하십시오.
+schema_version: 1
+
+vehicle:
+  calibrated: false
+  base_length: 0.255
+  base_width: 0.155
+  base_height: 0.070
+  wheel_radius: 0.0325
+  wheel_width: 0.026
+  wheel_base: 0.135
+  track_width: 0.150
+
+# REP-103 기준 base_link -> imu_link 변환. 길이는 m, 각도는 rad입니다.
+imu:
+  x: 0.0
+  y: 0.0
+  z: 0.0
+  roll: 0.0
+  pitch: 0.0
+  yaw: 0.0

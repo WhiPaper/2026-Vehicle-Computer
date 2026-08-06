@@ -6,7 +6,7 @@ from ament_index_python.packages import get_package_share_directory
 import yaml
 
 
-def test_uncalibrated_hardware_template_fails_at_launch():
+def test_uncalibrated_vehicle_example_fails_at_launch():
     share = get_package_share_directory("vc_bringup")
     result = subprocess.run(
         [
@@ -14,7 +14,7 @@ def test_uncalibrated_hardware_template_fails_at_launch():
             "launch",
             "vc_bringup",
             "state_estimation.launch.py",
-            f"vehicle_config:={share}/config/vehicle.yaml",
+            f"vehicle_config:={share}/config/vehicle.example.yaml",
         ],
         capture_output=True,
         check=False,
@@ -117,7 +117,10 @@ def test_vehicle_camera_is_optional_and_recording_uses_compressed_transport():
     recording_path = share / "launch" / "recording.launch.py"
     recording = load_launch_module(recording_path, "vc_bringup_recording_launch")
 
-    assert 'DeclareLaunchArgument("camera", default_value="true")' in vehicle_source
+    assert (
+        'DeclareLaunchArgument(\n                "camera",\n                default_value="true"'
+        in vehicle_source
+    )
     assert 'condition=IfCondition(LaunchConfiguration("camera"))' in vehicle_source
 
     without_camera = recording._recorded_topics("", False)

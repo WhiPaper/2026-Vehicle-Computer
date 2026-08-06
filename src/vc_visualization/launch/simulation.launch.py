@@ -78,17 +78,27 @@ def generate_launch_description():
     common = {"namespace": namespace, "use_sim_time": "true"}
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value="sim"),
+            DeclareLaunchArgument(
+                "namespace",
+                default_value="sim",
+                description="Isolated simulation namespace",
+            ),
             DeclareLaunchArgument(
                 "vehicle_config",
                 default_value=bringup_share + "/config/vehicle.fake.yaml",
+                description="Deterministic simulated vehicle config",
             ),
             DeclareLaunchArgument(
                 "safety_config",
                 default_value=get_package_share_directory("vc_safety")
                 + "/config/safety.yaml",
+                description="Validated safety gate parameter YAML",
             ),
-            DeclareLaunchArgument("headless", default_value="false"),
+            DeclareLaunchArgument(
+                "headless",
+                default_value="false",
+                description="Run Gazebo and the stack without RViz2",
+            ),
             OpaqueFunction(function=_gazebo_launch),
             IncludeLaunchDescription(
                 PythonLaunchDescriptionSource(

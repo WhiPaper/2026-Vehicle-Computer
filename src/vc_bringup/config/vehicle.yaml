@@ -1,5 +1,6 @@
-# Replace every example dimension with a measured SI value, then set
-# calibrated to true. vehicle.launch.py intentionally refuses this template.
+# 이 파일은 현재 프로젝트 차량의 보정된 운영 프로파일입니다.
+# 다른 차량에는 vehicle.example.yaml을 복사해 실측값을 입력하고 사용하십시오.
+# 길이는 m, 각도는 rad이며 ECU의 wheel radius/track width와 일치해야 합니다.
 schema_version: 1
 
 vehicle:

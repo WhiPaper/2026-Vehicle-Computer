@@ -23,8 +23,16 @@ def generate_launch_description():
     )
     return LaunchDescription(
         [
-            DeclareLaunchArgument("trace_session", default_value="vehicle"),
-            DeclareLaunchArgument("trace_path", default_value="traces"),
+            DeclareLaunchArgument(
+                "trace_session",
+                default_value="vehicle",
+                description="ros2_tracing session name",
+            ),
+            DeclareLaunchArgument(
+                "trace_path",
+                default_value="traces",
+                description="ros2_tracing output directory",
+            ),
             start,
             RegisterEventHandler(OnShutdown(on_shutdown=[stop])),
         ]

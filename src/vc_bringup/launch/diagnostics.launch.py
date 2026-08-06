@@ -13,14 +13,29 @@ def generate_launch_description():
     namespace = LaunchConfiguration("namespace")
     return LaunchDescription(
         [
-            DeclareLaunchArgument("namespace", default_value=""),
+            DeclareLaunchArgument(
+                "namespace", default_value="", description="Diagnostics namespace"
+            ),
             DeclareLaunchArgument(
                 "diagnostics_config",
                 default_value=share + "/config/diagnostics.yaml",
+                description="diagnostic_aggregator configuration",
             ),
-            DeclareLaunchArgument("monitor_serial", default_value="false"),
-            DeclareLaunchArgument("serial_device", default_value=""),
-            DeclareLaunchArgument("use_sim_time", default_value="false"),
+            DeclareLaunchArgument(
+                "monitor_serial",
+                default_value="false",
+                description="Monitor the stable serial device",
+            ),
+            DeclareLaunchArgument(
+                "serial_device",
+                default_value="",
+                description="Serial path used by the diagnostic monitor",
+            ),
+            DeclareLaunchArgument(
+                "use_sim_time",
+                default_value="false",
+                description="Use the ROS simulation clock",
+            ),
             Node(
                 package="vc_bringup",
                 executable="serial_connection_monitor",

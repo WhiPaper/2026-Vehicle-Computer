@@ -1,16 +1,21 @@
 /**:
   ros__parameters:
+    # Publication cadence. The command gate runs at 20 Hz and diagnostics at 5 Hz.
     publish_rate_hz: 20.0
     status_rate_hz: 5.0
+    # Fail-closed receive and timestamp limits.
     data_timeout_ms: 200
     diagnostics_timeout_ms: 500
     command_timeout_ms: 250
     future_tolerance_ms: 100
+    # Replace these defaults with validated vehicle-specific safety limits.
     max_linear_speed_mps: 1.0
     max_angular_speed_rps: 2.0
+    # Expected REP-105/REP-103 frame names.
     odom_frame: odom
     base_frame: base_link
     imu_frame: imu_link
+    # Statistics are observability only; they never override the gate decision.
     enable_topic_statistics: true
     statistics_topic: vehicle/safety/statistics
     use_sim_time: false
